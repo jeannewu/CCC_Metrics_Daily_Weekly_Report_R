@@ -1,0 +1,1065 @@
+---
+title: "RMarkDown_CCC_weekly_metrics"
+author: "JingWU"
+header-includes:  
+    - \usepackage[labelformat=empty]{caption}
+#date: "`r format(Sys.Date(), '%d %B, %Y')`"
+data: 2022-12-19
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    keep_tex: yes
+    latex_engine: xelatex
+    fig_width: 7
+    fig_height: 6
+    fig_caption: true
+  df_print: paged 
+---
+
+
+```{r setup,include=FALSE,echo=FALSE,results='hold'}
+knitr::opts_chunk$set(echo = TRUE)
+library(bigrquery)
+library(data.table) ###to write or read and data management 
+library(boxr) ###read or write data from/to box
+library(tidyverse) ###for data management
+library(dplyr) ###data management
+library(reshape)  ###to work on transition from long to wide or wide to long data
+library(listr) ###to work on a list of vector, files or..
+library(sqldf) ##sql
+library(lubridate) ###date time
+library(ggplot2) ###plots
+library(ggpubr) ###for the publications of plots
+library(RColorBrewer) ###visions color http://www.sthda.com/english/wiki/colors-in-r
+library(gridExtra)
+library(stringr) ###to work on patterns, charaters
+library(plyr)
+library(rmarkdown) ###for the output tables into other files: pdf, rtf, etc.
+library(janitor) #to get the summary sum
+library(sas7bdat) ###input data
+library(finalfit) #https://cran.r-project.org/web/packages/finalfit/vignettes/export.html t
+library(expss) ###to add labels
+library(epiDisplay) ##recommended applied here crosstable, tab1
+library(summarytools) ##recommended
+library(gmodels) ##recommended
+library(magrittr)
+library(arsenal)
+library(gtsummary)
+library(kableExtra)
+
+# box_auth(client_id = "627lww8un9twnoa8f9rjvldf7kb56q1m",
+#          client_secret = "gSKdYKLd65aQpZGrq9x4QVUNnn5C8qqm")
+# 
+# box_setwd(dir_id = 161836233301) 
+# recr_noinact_wl1 <- box_read(file_id = 1054107843458)
+ #recr_noinact_wl1 <- readRDS("~/Documents/CONNECT_projects/Biospecimen_Feb2022/Jing_projects/biospecQC_03082022/data/recruit.rds")
+ #ids <- paste0("MC000003A7",c(8985:9004))
+ #recr_noinact_wl1$studyId[(recr_noinact_wl1$studyId %in% ids)] #0 existing
+ #data <- recr_noinact_wl1[ which (recr_noinact_wl1$studyId %nin% ids),]
+# bq_auth()
+# project <- "nih-nci-dceg-connect-prod-6d04"
+# billing <- "nih-nci-dceg-connect-prod-6d04" ##project and billing should be consistent
+# 
+# recr_var <- bq_project_query(project, query="SELECT * FROM `nih-nci-dceg-connect-prod-6d04.FlatConnect`.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS WHERE table_name='participants_JP'")
+# recrvar <- bigrquery::bq_table_download(recr_var,bigint = "integer64")
+# 
+# 
+# nvar = floor((length(recrvar$column_name))/4) ##to define the number of variables in each sql extract from GCP
+# nvar
+# 
+# # Start column for each split data frame
+# start = seq(1,length(recrvar$column_name),nvar)
+# end <- length(recrvar$column_name)
+# 
+# recrbq <- list()
+# for (i in (1:length(start)))  {
+#   select <- paste(recrvar$column_name[start[i]:(min(start[i]+nvar-1,end))],collapse=",")
+#   tmp <- eval(parse(text=paste("bq_project_query(project, query=\"SELECT token,", select,"FROM `nih-nci-dceg-connect-prod-6d04.FlatConnect.participants_JP` Where d_512820379 != '180583933'\")",sep=" ")))
+#   recrbq[[i]] <- bq_table_download(tmp, bigint="integer64")
+# }
+# 
+# recr_noinact_wl <- recrbq %>% reduce(inner_join, by = "token")
+
+recr_noinact_wl1 <- readRDS("~/Documents/CONNECT_projects/Biospecimen_Feb2022/Jing_projects/biospecQC_03082022/data/recruit.rds")
+  # Check that it doesn't match any non-number
+  numbers_only <- function(x) !grepl("\\D", x)
+
+ ###convert the numeric
+ # recr_noinact_wl1 <- recr_noinact_wl
+ # cnames <- names(recr_noinact_wl)
+ # ###to check variables in recr_noinact_wl1
+ # for (i in 1: length(cnames)){
+ #   varname <- cnames[i]
+ #   var<-pull(recr_noinact_wl1,varname)
+ #   recr_noinact_wl1[,cnames[i]] <- ifelse(numbers_only(var), as.numeric(as.character(var)), var)
+ # }
+
+data <- recr_noinact_wl1[which(recr_noinact_wl1$d_512820379 != 180583933),] #0 removeal
+
+data <- recr_noinact_wl1[which (recr_noinact_wl1$d_821247024 != 922622075 | recr_noinact_wl1$d_512820379 !=486306141),] #248
+
+
+data <- data %>% mutate(reruit_type = case_when(d_512820379 == 486306141 ~ "Active",
+                                                d_512820379 == 854703046 ~ "Passtive"),
+                        verified_type = case_when(state_d_444699761	== 426360242 & d_821247024 == 197316935 ~ "Automated Verification", #RcrtV_Automated_v1r0
+                                                  d_821247024 == 197316935 & state_d_444699761	%in% c(734437214,NA)  & state_d_953614051	== 426360242 & (state_d_188797763 %in% c(104430631,NA)) ~ "Mannual Verification",#	RcrtV_Mannual_v1r0 without outreach
+                                                  d_821247024 == 197316935 & state_d_444699761	%in% c(734437214,NA)  & state_d_953614051	== 426360242 & state_d_188797763 == 353358909 ~ "Mannual Verification and outreach", #	RcrtV_Mannual_v1r0
+                        ),
+                        active_camptype = case_when(state_d_667474224 == 926338735 ~ "Random",
+                                                    state_d_667474224 == 348281054 ~ "Screening appointment",
+                                                    state_d_667474224 == 324692899 ~ "Non-screening appointment",
+                                                    state_d_667474224 == 351257378 ~ "Demographic Group",
+                                                    state_d_667474224 == 647148178 ~ "Aging out of study",
+                                                    state_d_667474224 == 834544960 ~ "Geographic group",
+                                                    state_d_667474224 == 682916147 ~ "Post-screening appointment",
+                                                    state_d_667474224 == 153365143 ~ "Technology adapters",
+                                                    state_d_667474224 == 663706936 ~ "Low-income/health professional shortage areas",
+                                                    state_d_667474224 == 181769837 ~ "Other",
+                                                    state_d_667474224 == 398561594 ~ "None of these apply")) 
+
+
+data <- apply_labels(data,d_827220437 = "Site",#RcrtES_Site_v1r0
+                     d_827220437 = c("HealthPartners"= 531629870, "Henry Ford Health System"=548392715, "Kaiser Permanente Colorado" = 125001209,
+                                     "Kaiser Permanente Georgia" = 327912200,"Kaiser Permanente Hawaii" = 300267574,"Kaiser Permanente Northwest" = 452412599,
+                                     "Marshfield Clinic Health System" = 303349821,"Sanford Health" = 657167265, "University of Chicago Medicine" = 809703864,
+                                     "National Cancer Institute" = 517700004,"National Cancer Institute" = 13,"Other" = 181769837))
+
+library(rio)
+dictionary <- rio::import("https://episphere.github.io/conceptGithubActions/aggregate.json",format = "json") ###mastr DD for all the CIDs in Connect data
+dd<-rbindlist(dictionary,fill=TRUE,use.names=TRUE,idcol="CID")
+
+#RcrtSI_SignedIn_v1r0 RcrtCS_Consented_v1r0 RcrtUP_Submitted_v1r0  Rcrt_completion_v1r0 Rcrt_Verified_v1r
+data <- data[which(data$d_512820379 != 180583933),]
+data <- data[which (data$d_821247024 != 922622075 | data$d_512820379 !=486306141),] #248
+data$site <- factor(data$d_827220437,exclude=NULL)
+
+##TABLE RcrtSI_RecruitType_v1r0 /out=recruittypetotal
+recruittypetotal <- as.data.frame(tab1(data$reruit_type)[[2]])
+recruittypetotal$`Recruitment Type` <- rownames(recruittypetotal)
+#column_names <- recruittypetotal %>% 
+#  names() %>% 
+#  str_replace_all( "_", "\n")
+
+# 
+# recruittypetotal %>%  knitr::kable(
+#   format = "latex",
+#   booktabs = TRUE,
+#   longtable = TRUE,
+#   linesep = "",
+#   align = "l",
+#   col.names = linebreak(colnames(recruittypetotal), align = "l"),
+#   escape = FALSE
+# ) %>%
+#   kableExtra::kable_styling(
+#     position = "left",
+#     latex_options = c("striped", "repeat_header"),
+#     stripe_color = "gray!15"
+#   )
+
+#Table 2. Total Number Verified
+table2_verified <- data %>% filter(d_821247024 == 197316935) %>% 
+  dplyr::select(site) %>%
+  tbl_summary()%>% 
+  modify_header(label ~ "Total VerifiedRecruits") %>%
+  modify_caption("Table 2. Total Number Verified") %>%
+  as_kable()
+
+
+recruitsites <- as.data.frame(tab1(data[which(data$d_821247024 == 197316935),]$site)[[2]])
+recruitsites$site <- gsub("\\.","\\ \\", rownames(recruitsites))
+
+recruitsites$`Total VerifiedRecruits` <- paste0(recruitsites$Frequency,"(",round(recruitsites$Percent,2), "%)")
+
+#Table 3. Verification Mode of Those Successfully Verified
+verified <- data[which(data$d_821247024 ==197316935),]
+verified <- data[which(data$d_821247024 ==197316935),] %>% 
+  mutate(verified_type = ifelse(state_d_444699761	== 426360242, "Automated Verification", #RcrtV_Automated_v1r0,
+                           ifelse(state_d_444699761	%in% c(734437214,NA)  & state_d_953614051	== 426360242 & (state_d_188797763 %in% c(104430631,NA)), "Mannual Verification",#	RcrtV_Mannual_v1r0 without outreach,
+                           ifelse(state_d_444699761	%in% c(734437214,NA)  & state_d_953614051	== 426360242 & state_d_188797763 == 353358909, "Mannual Verification and outreach", #	RcrtV_Mannual_v1r0,
+                           "Unknown"))))
+
+#table(data$site,data$verified_type)
+# Automated Verification              Mannual Verification Mannual Verification and outreach 
+# 2870                               153                                 2 
+
+
+pct_tb <- function(x,y){
+  table1 <- CrossTable(x,y, prop.t=FALSE, prop.r=FALSE, prop.c=TRUE,chisq=FALSE)
+  pct <- as.data.frame(cbind(table1$prop.row,table1$t))
+  total <- as.numeric(sum(pct[,3] + pct[,4]))
+  pct[nrow(pct)+1,c(1:4)] <- c(sum(pct[,3])/total,sum(pct[,4])/total,sum(pct[,3]),sum(pct[,4]))
+  rownames(pct)[nrow(pct)] <- "Total"
+  colnames(pct)[c(1:2)] <- paste0("pct_",colnames(pct[c(1:2)]))
+  colnames(pct)[c(3:4)] <- paste0("n_",colnames(pct)[c(3:4)])
+  
+  pct[,5] <- paste0(pct[,3]," (",round(100*pct[,1],2), "%)")
+  pct[,6] <- paste0(pct[,4]," (",round(100*pct[,2],2), "%)") 
+  colnames(pct)[5] <- paste0("n_",colnames(pct)[1])
+  colnames(pct)[6] <- paste0("n_",colnames(pct)[2])
+  return(pct)
+}
+
+verified_type <- c("state_d_444699761","state_d_953614051","state_d_188797763")
+# veritype <- list()
+# for (i in 1:3){
+#   
+#   tmp <- eval(parse(text=paste("pct_tb(verified$site,verified$",verified_type[i],")",sep="")))
+#   colnames(tmp) <- paste(verified_type[i],colnames(tmp))
+#   tmp$site <- rownames(tmp)
+#   veritype[[i]] <- as.data.frame(tmp)
+# }
+# veritypes <-  veritype %>% reduce(full_join, by='site') 
+# colnames(veritypes)[7] <- "site"
+# veritypes1 <- merge(veritypes,recruitsites,by.x="site",by.y="site",all.y=TRUE)
+# veritypes_1 <- veritypes1[,which(grepl("n_pct_426360242",colnames(veritypes1)) |grepl("n_pct_353358909",colnames(veritypes1))| colnames(veritypes1) %in% c("site","Frequency"))]
+# veritypes_1$Site <-ifelse(veritypes_1$site == "X  Total", "Total", veritypes_1$site)
+# 
+# #veritypes_1[11,2] = sum(veritypes$`d_444699761 n_426360242`)
+# #veritypes_1[11,3] = sum(veritypes$`d_953614051 n_426360242`)
+# #veritypes_1[11,4] = sum(veritypes$`d_188797763 n_353358909`)
+# veritypes_1 <- veritypes_1[which(veritypes_1$Frequency!=0), c(6,2,3,4,5)]
+
+#Table3. Verification Mode of Those Successfully Verified
+#colnames(veritypes_1) <- c("Site","Automated Verification","Manual Verification","Manual Verification and Outreach","Total Verified Recruits")
+
+
+table3_verifiedtype <-  data %>% filter(d_821247024 == 197316935) %>% mutate(site=droplevels(site)) %>%
+  select(site, verified_type) %>% tbl_cross(
+    row = site,
+    col = verified_type,
+    percent = "row",) %>%
+  bold_labels() %>%
+  italicize_levels() %>% 
+  modify_header(label ~ "Verification Mode of Those Successfully Verified") %>%
+  modify_caption("Table 4. Verification Mode of Those Successfully Verifieds") %>%
+  as_kable()
+
+#Figure 1. Number Verified Over Time
+var.list <- c("token","Connect_ID","d_821247024","d_914594314","d_512820379","state_d_158291096","d_471593703","d_827220437","site")
+
+veri_resp <- data[which(data$d_821247024 == 197316935),var.list] %>%
+  mutate(recruit_year= year(ymd_hms(d_471593703)),
+          recruit_month = month(ymd_hms(d_471593703)),
+          verified_year= year(ymd_hms(d_914594314)),
+          verified_month = month(ymd_hms(d_914594314))) 
+
+veri_resp$verified_time <- ymd_hms(veri_resp$d_914594314)
+veri_resp$recru_time <- ymd_hms(veri_resp$d_471593703)
+veri_resp$recrstart.date <- as_date(min(as.POSIXct(veri_resp$recru_time)))
+veri_resp$verified.week <- ceiling(as.numeric(difftime(as_date(veri_resp$verified_time),as_date(veri_resp$recrstart.date),units="days"))/7)
+
+#verified by site over time:
+veri_allsites  <- NULL
+
+for(site in unique(veri_resp[which(veri_resp$d_827220437>0),]$site)){
+  
+  subs_verif <- veri_resp[which(veri_resp$site == site & veri_resp$d_827220437>0 ),]%>% 
+    group_by(verified.week,recrstart.date) %>%
+    dplyr::summarize(new_verified=n())
+  subs_verif$Total.verified <- cumsum(subs_verif$new_verified)
+  subs_verif$site <- site
+  veri_allsites <- rbind(veri_allsites,subs_verif)
+} 
+colnames(veri_allsites)
+veri_allsites$verified.week.date <- (veri_allsites$recrstart.date) + dweeks(veri_allsites$verified.week)
+
+Fig1_verified_time <- ggplot(veri_allsites,aes(y=Total.verified, x=as.Date(verified.week.date),color=site)) + geom_line() +    geom_point()+
+  scale_y_continuous(name="# Verified", limits=c(0,1000)) +
+  scale_x_date(name="date",date_labels = "%y-%m-%d", date_breaks = "2 week")  +
+  ggtitle("Number Verified Over Time")+
+  theme( axis.text.x=element_text(angle=60, hjust=1), axis.title.x = element_text( size = 14, face = "bold") ,
+         axis.title.y = element_text(size = 14, face = "bold",color="black"),
+         plot.title = element_text(face="bold", size=18),
+         # Remove panel border
+         panel.border = element_blank(),  
+         # Remove panel grid lines
+         panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         # Remove panel background
+         panel.background = element_blank(),
+         # Add axis line
+         axis.line = element_line(colour = "grey") ,
+         ##put the legend in the plot
+         legend.position = c(.2, .6),
+         legend.margin = margin(1, 1, 1, 1)
+  ) 
+
+##Table4: Reason Cannot Be Verified
+verinot_site  <- NULL
+
+for(site in unique(data[which(data$d_827220437>0),]$site)){
+  
+  subs <- data[which(data$site == site & data$d_827220437>0 ),]
+  Total <- nrow(subs)
+  notverif <- nrow(subs[which(subs$d_821247024 ==219863910),])
+  tmp <- as.data.frame(t(c(site,Total,notverif)))
+  colnames(tmp) <- c("Site","Total Recruits","n.Cannot.Be.Verified")
+  verinot_site <- rbind(verinot_site,tmp)
+} 
+verinot_site$pct <- as.numeric(verinot_site$n.Cannot.Be.Verified)/as.numeric(verinot_site$`Total Recruits`)
+verinot_site$'Cannot Be Verified' <- paste0(verinot_site$n.Cannot.Be.Verified, "(",round(100*verinot_site$pct,2),"% )")
+
+
+urlfile<- "https://github.com/episphere/conceptGithubActions/raw/master/csv/masterFile.csv" ###to grab the updated dd from github
+y <- read.csv(urlfile)
+
+# requested <- NULL
+# for (i in 1:length(CID3) ){
+#   grab <-  as.data.frame(y[which(grepl(CID3[i],y$conceptId.3)),])
+#   requested <- rbind(requested,grab)
+# }  
+#requested[,c("conceptId.3","Variable.Label","Variable.Name")]
+
+#Table 5. Verification Mode of Those Successfully Verified
+verified_reasons <- c("state_d_147176963","state_d_557461333","state_d_725929722","state_d_679832994",
+                      "state_d_711794630","state_d_570452130",	"state_d_629484663","state_d_547895941")
+CID3 <- gsub("d_","",verified_reasons)
+library(RCurl)
+veri_reasons <- data[which(data$d_821247024 ==219863910 ),c("Connect_ID","token",verified_reasons)]
+summary(veri_reasons)
+
+pct_tb <- function(x,y){
+  table1 <- CrossTable(x,y, prop.t=FALSE, prop.r=FALSE, prop.c=TRUE,chisq=FALSE)
+  pct <- as.data.frame(cbind(table1$prop.row,table1$t))
+  total <- as.numeric(sum(pct[,3] + pct[,4]))
+  pct[nrow(pct)+1,c(1:4)] <- c(sum(pct[,3])/total,sum(pct[,4])/total,sum(pct[,3]),sum(pct[,4]))
+  rownames(pct)[nrow(pct)] <- "Total"
+  colnames(pct)[c(1:2)] <- paste0("pct_",colnames(pct[c(1:2)]))
+  colnames(pct)[c(3:4)] <- paste0("n_",colnames(pct)[c(3:4)])
+  
+  pct[,5] <- paste0(pct[,3]," (",round(100*pct[,1],2), "%)")
+  pct[,6] <- paste0(pct[,4]," (",round(100*pct[,2],2), "%)") 
+  colnames(pct)[5] <- paste0("n_",colnames(pct)[1])
+  colnames(pct)[6] <- paste0("n_",colnames(pct)[2])
+  return(pct)
+}
+
+recruitsites <- as.data.frame(tab1(data$site)[[2]])
+recruitsites$site <- gsub("\\.","\\ \\",  
+                          gsub("X\\..","", rownames(recruitsites)))
+##Table: Reason Cannot Be Verified
+reason <- list()
+for (i in 1:8){
+
+   tmp <- eval(parse(text=paste("pct_tb(data$site,data$",verified_reasons[i],")",sep="")))
+   colnames(tmp) <- paste(verified_reasons[i],colnames(tmp))
+   tmp$site <- rownames(tmp)
+   reason[[i]] <- as.data.frame(tmp)
+  
+}
+
+reasons <-  reason %>% reduce(full_join, by='site') 
+#colnames(reasons1)
+reasons1 <- merge(reasons,recruitsites,by.x="site",by.y="site")
+reasons1 <- reasons1[,which(grepl("n_pct_356674370",colnames(reasons1)) |grepl("n_pct_539025306",colnames(reasons1))| colnames(reasons1) %in% c("site","Frequency"))]
+
+#update the colnames
+colnames(reasons1) <- c("Site","First Name Not Matched","Last Name Not Matched","DOB Not Matched","Token Not Matched","PIN Not Matched","Site Not Matched",
+                        "Age Not Matched","Cancer Status Not Matched","Total Recruits")
+
+
+##Table6 Previous Cancer d_452166062
+cancer_past<- pct_tb(data$site,data$d_452166062)
+cancer_site  <- NULL
+
+for(site in unique(data[which(data$d_827220437>0),]$site)){
+  
+  subs <- data[which(data$site == site & data$d_827220437>0 ),]
+  Total <- nrow(subs)
+  ca.history <- nrow(subs[which(subs$d_452166062 ==353358909),])
+  tmp <- as.data.frame(t(c(site,Total,ca.history)))
+  colnames(tmp) <- c("Site","Total Recruits","n.Previous.Cancer")
+  cancer_site <- rbind(cancer_site,tmp)
+} 
+
+cancer_site[10,c(1:3)] <- c("Total",sum(as.numeric(cancer_site$`Total Recruits`)),sum(as.numeric(cancer_site$n.Previous.Cancer)))
+cancer_site$pct <- as.numeric(cancer_site$n.Previous.Cancer)/as.numeric(cancer_site$`Total Recruits`)
+cancer_site$'Previous Cancer' <- paste0(cancer_site$n.Previous.Cancer, " (",round(100*cancer_site$pct,2),"% )")
+
+                            
+table3_verifiedtype <-  data %>% filter(d_821247024 == 197316935) %>% 
+  select(site, verified_type) %>% tbl_cross(
+    row = site,
+    col = verified_type,
+    percent = "row",) %>%
+  bold_labels() %>%
+  italicize_levels() %>% 
+  modify_header(label ~ "Verification Mode of Those Successfully Verified") %>%
+  modify_caption("Table 2. Verification Mode of Those Successfully Verifieds") %>%
+  as_kable()
+
+#Table 7. Pre-Consent Opt-Out Reasons Among Those that Opted Out  #d_706283025
+#among RcrtSI_OptOut_v1r0 (158291096)= 353358909 AND RcrtSI_RecruitType_v1r0 = 486306141
+
+optout_reasons <- colnames(data)[grepl("706283025",colnames(data))]  #35
+optout_reasons <- optout_reasons[-16] #to remove "d_706283025_d_415693436" character outputs #34
+
+optout <- data[which(data$d_512820379==486306141 & data$state_d_158291096==353358909),c("Connect_ID","token","d_821247024","site","state_d_158291096",optout_reasons)] #4374 variable=41
+empty_columns <- colSums(is.na(optout) |optout == "") == nrow(optout)
+
+optout1 <- optout[!empty_columns] #32 columns
+optout1_sites <- as.data.frame(tab1(optout1$site)[[2]])
+optout1_sites$site <- gsub("\\.","\\ \\",  
+                          gsub("X\\..","", rownames(optout1_sites))) #11
+
+
+optout_reason1 <- colnames(optout1)[c(6:17,19:32)]
+opt_id <- list()
+for (i in 1:length(optout_reason1)){
+  tmp <- eval(parse(text=paste("pct_tb(optout1$site,optout1$",optout_reason1[i],")",sep="")))
+  colnames(tmp) <- paste(optout_reason1[i],colnames(tmp))
+  tmp$site <- rownames(tmp)
+  opt_id[[i]] <- as.data.frame(tmp)
+}
+
+optouts <-  opt_id %>% purrr::reduce(full_join, by='site') 
+
+optouts1 <- merge(optouts,optout1_sites,by.x="site",by.y="site", all.y=TRUE)
+optouts1 <- optouts1[,which(grepl("n_pct_353358909",colnames(optouts1)) | colnames(optouts1) %in% c("site","Frequency"))]
+optouts1[is.na(optouts1)] = "0 (0%)"
+#unique(opt_long1[,c("optout_types","Variable.Label")])
+
+optouts1_transpose <- t(optouts1[c(1:9,11,10),c(2:as.numeric(ncol(optouts1)))])
+
+rownames(optouts1_transpose)
+optouts1_transpose <- as.data.frame(optouts1_transpose)
+colnames(optouts1_transpose) <- optouts1[c(1:9,11,10),"site"]
+
+optouts1_transpose$CID3 <- ifelse(grepl("n_pct_353358909",rownames(optouts1_transpose)), gsub(" n_pct_353358909|state_d_706283025_d_","", rownames(optouts1_transpose)), NA)
+optouts1_transpose$optout_ids <- ifelse(grepl("n_pct_353358909",rownames(optouts1_transpose)), gsub(" n_pct_353358909|state_d_706283025_d_","", rownames(optouts1_transpose)), "Total")
+optouts1_transpose$CID3 <- as.integer(optouts1_transpose$CID3)
+grab <- y %>% filter(grepl(paste(optouts1_transpose$CID3,collapse = "|"),y$conceptId.3)) %>% select(conceptId.3, Variable.Label)
+grab<-grab %>%  dplyr::rename(CID3=conceptId.3)
+
+Table7_optreasons <- merge(grab[,c("CID3","Variable.Label")],optouts1_transpose,by.x="CID3",by.y="CID3",all.y=TRUE)
+colnames(Table7_optreasons)[2] <- "Opt out reasons" 
+
+#Table 8. Recruitment Success By Campaign Among Active Recruits 66747227  
+ ##for successul active campaign recrruits as the active verified by each campaign type                         
+table8_successcamptype <-  data %>% filter(d_821247024 == 197316935 & d_512820379 == 486306141 & d_827220437 >0) %>% 
+  select(site, active_camptype) %>% tbl_cross(
+    row = site,
+    col = active_camptype,
+    percent = "row",
+    missing = "no") %>%
+  bold_labels() %>%
+  italicize_levels() %>% 
+  modify_header() %>%
+  modify_caption("Table 8. Recruitment Success By Campaign Among Active Recruits") %>%
+  as_kable()
+#Table 9. Total Number of Active Recruits in Campaign
+table9_Totalactivecamp <-  data %>% filter(d_512820379 == 486306141 & d_827220437 >0) %>% 
+  select(site, active_camptype) %>% tbl_cross(
+    row = site,
+    col = active_camptype,
+    percent = "row",
+    missing = "no") %>%
+  bold_labels() %>%
+  italicize_levels() %>% 
+  modify_header( ) %>%
+  modify_caption("Table 9.  Total Number of Active Recruits in Campaign") %>%
+  as_kable() 
+
+#Table 10. Time from Active Recruitment to Sign In
+#TIME TO COMPLETION OF ENROLLMENT FOR CCC WEEKLY REPORT (ALL SITES) TmFrmActRecToSignIn2 = RcrtSI_SignTime_v1r0 (335767902) - RcrtSI_TypeTime_v1r0 (471593703)
+recruit.times <- c("d_335767902","d_471593703","d_454445267","d_430551721","d_914594314")
+recruit_timing <- data[,c("token","Connect_ID","d_827220437","d_821247024","d_230663853","d_512820379","d_699625233","d_919254129","site",recruit.times)]
+                          
+recruit_timing$recru_time <- ymd_hms(recruit_timing$d_471593703) #entering recruits start time
+recruit_timing$signin_time <- ymd_hms(recruit_timing$d_335767902) #sign-in time (step2)
+recruit_timing$consent_time <- ymd_hms(recruit_timing$d_454445267) #submit consent form (step3)
+recruit_timing$profile_time <- ymd_hms(recruit_timing$d_430551721)  #submit profile (step4)
+recruit_timing$verified_time <- ymd_hms(recruit_timing$d_914594314) #final verified (step5)
+
+recruit_timing$tm_recr_signin <- as.numeric(difftime(recruit_timing$signin_time,recruit_timing$recru_time,units="mins"))
+recruit_timing$tm_signin_cst <- as.numeric(difftime(recruit_timing$consent_time,recruit_timing$signin_time,units="mins"))
+recruit_timing$tm_consent_prof <- difftime(recruit_timing$profile_time,recruit_timing$consent_time,units="mins")
+recruit_timing$tm_prof_verif <- difftime(recruit_timing$verified_time,recruit_timing$profile_time,units="mins")
+
+time_recr <-  recruit_timing %>% 
+  filter(d_512820379 == 486306141 & d_827220437 >0 & !is.na(tm_recr_signin))  %>% dplyr::select(tm_recr_signin,site)
+
+table10_Tm_recr_sign1 <- recruit_timing %>% filter(d_512820379 == 486306141 & d_827220437 >0 & d_230663853==353358909 & !is.na(tm_recr_signin) ) %>% 
+  mutate(time = tm_recr_signin/1440) %>% # Summary by group using dplyr
+  group_by(site) %>% 
+  dplyr::summarize(count=n(),
+            min = min(time),
+            q1 = quantile(time, 0.25),
+            median = median(time),
+            mean = mean(time),sd=sd(time),
+            q3 = quantile(time, 0.75),
+            max = max(time))
+
+#Table 11. Time from Sign In to Consent
+
+table11_Tm_signin_cst <- recruit_timing %>% filter(d_512820379 == 486306141 & d_827220437 >0 & 
+                                                    d_230663853==353358909 & d_919254129== 353358909 & !is.na(tm_signin_cst) ) %>% 
+  mutate(time = tm_signin_cst) %>% # Summary by group using dplyr, to make the time units as hours
+  group_by(site) %>% 
+  dplyr::summarize(count=n(),
+                   min = min(time),
+                   q1 = quantile(time, 0.25),
+                   median = median(time),
+                   mean = mean(time),sd=sd(time),
+                   q3 = quantile(time, 0.75),
+                   max = max(time))
+
+#Table 12. Time from Consented to UP Submitted
+table12_Tm_consent_prof <- recruit_timing %>% filter(d_512820379 == 486306141 & d_827220437 >0 & d_230663853==353358909 &
+                                                      d_919254129== 353358909 & d_699625233 == 353358909 &!is.na(tm_consent_prof) ) %>% 
+  mutate(time = tm_consent_prof) %>% # Summary by group using dplyr, to make the time units as hours
+  group_by(site) %>% 
+  dplyr::summarize(count=n(),
+                   min = min(time),
+                   q1 = quantile(time, 0.25),
+                   median = median(time),
+                   mean = mean(time),sd=sd(time),
+                   q3 = quantile(time, 0.75),
+                   max = max(time))
+#Table 13. Time from UP Submitted to Verification Complete
+table13_Tm_prof_verif <- recruit_timing %>% filter(d_512820379 == 486306141 & d_827220437 >0 & d_230663853==353358909 &
+                                                       d_919254129== 353358909 & d_699625233 == 353358909 & d_821247024 != 875007964 & !is.na(tm_prof_verif) ) %>% 
+  mutate(time = tm_prof_verif) %>% # Summary by group using dplyr, to make the time units as hours
+  group_by(site) %>% 
+  dplyr::summarize(count=n(),
+                   min = min(time),
+                   q1 = quantile(time, 0.25),
+                   median = median(time),
+                   mean = mean(time),sd=sd(time),
+                   q3 = quantile(time, 0.75),
+                   max = max(time))
+#Table 14. Total Enrollment Time
+
+table14_Tm_enroll_verif <- recruit_timing[complete.cases(recruit_timing[,recruit.times]),] %>% 
+  filter(d_512820379 == 486306141 & d_827220437 >0 & d_230663853==353358909 &
+         d_919254129== 353358909 & d_699625233 ==353358909 & d_821247024 != 875007964 ) %>% 
+  mutate(time = difftime(verified_time,recru_time,units="days")) %>% # Summary by group using dplyr, to make the time units as hours
+  group_by(site) %>% 
+  dplyr::summarize(count=n(),
+                   min = min(time),
+                   q1 = quantile(time, 0.25),
+                   median = median(time),
+                   mean = mean(time),sd=sd(time),
+                   q3 = quantile(time, 0.75),
+                   max = max(time))
+
+#Table 15. Sign-In Mechanism Used for First Log On
+data$d_995036844 <- factor(data$d_995036844,levels=c("google.com","password","phone"))                                             
+signin_methods1 <- data %>% filter(d_230663853==353358909 & d_919254129== 353358909 ) %>% mutate(site = as.character(site)) %>%
+  select(site,d_995036844) %>% tbl_cross(
+    col = d_995036844,
+    row = site,
+    label = d_995036844 ~"Account Sign-In Mechanism",
+    percent = "row",
+    missing = "ifany",
+    margin_text = "Total Recruits that have Signed In and Consented",
+    missing_text = "(Missing)")  %>%
+  add_n() %>%
+  bold_labels() %>%
+  italicize_levels() %>% 
+  modify_header(label ~ " Account Sign-in Mechanism") %>%
+  modify_caption("Table 15. Sign-In Mechanism Used for First Log On") %>%
+  as_kable() 
+
+#Table 16. How Recruit Heard About Study
+#/*HOW RECRUIT HEARD ABOUT STUDY*/
+#*Creating 0/1 variables for how recruit heard about study;d_142654897
+
+recruitsites <- as.data.frame(tab1(data[which(data$d_827220437>0),]$site)[[2]])
+recruitsites$site <- gsub("\\.","\\ \\",  
+                          gsub("X\\..","", rownames(recruitsites)))
+
+recruitsites <- recruitsites[which(recruitsites$site !="NA"),]
+awareness <- colnames(data)[grepl("142654897",colnames(data))]  #19
+
+aware <- data[,c("Connect_ID","token","d_821247024","site","state_d_158291096",awareness)] 
+empty_columns <- colSums(is.na(aware) |aware == "") == nrow(aware)
+colnames(aware[empty_columns]) #0
+
+aware$awarecounts <- 0
+for (i in 1:length(awareness)){
+  aware.c <- ifelse(aware[,awareness[i]] ==104430631 | is.na(aware[,awareness[i]]), 0, 1)
+  aware$awarecounts <- aware$awarecounts + aware.c
+}
+
+aware$d_142654897_d_0 <- ifelse(aware$awarecounts==1, 353358909, 104430631 ) #no response sent
+
+CID3 <- sapply(strsplit(as.character(awareness),"d_"),"[",3)
+ grab <- y %>% filter(grepl(paste(CID3,collapse = "|"),y$conceptId.3)) %>% select(conceptId.3, Variable.Label)
+
+aware_id <- list()
+for (i in 1:length(awareness)){
+  tmp <- eval(parse(text=paste("pct_tb(aware$site,aware$",awareness[i],")",sep="")))
+  #eval(parse(text=paste("tmp <- optout1 %>% group_by(",optout_reason1[1],",site) %>% dplyr::summarise(count=n())",sep="")))
+  
+  colnames(tmp) <- paste(awareness[i],colnames(tmp))
+  tmp$site <- rownames(tmp)
+  aware_id[[i]] <- as.data.frame(tmp)
+}
+
+aware.n <- pct_tb(aware$site,aware$d_142654897_d_0)
+colnames(aware.n) <- paste("d_142654897_d_0",colnames(aware.n))
+awares <-  aware_id %>% reduce(full_join, by='site') 
+awares1 <-merge(awares,aware.n,by.x='site',by.y='row.names')
+
+awares1 <- merge(awares1,recruitsites,by.x="site",by.y="site", all.y=TRUE) #variables=121
+
+awares1 <- awares1[,which(grepl("n_pct_353358909",colnames(awares1)) | colnames(awares1) %in% c("site","Frequency"))]
+awares1_transpose <- t(awares1[c(1:9,11,10),c(2:22)])
+colnames(awares1_transpose) <- awares1[c(1:9,11,10),"site"]
+
+awares1_transpose <- as.data.frame(awares1_transpose)
+
+
+awares1_transpose$CID3 <- ifelse(grepl("n_pct_353358909",rownames(awares1_transpose)), gsub("n_pct_353358909|d_142654897_d_","", rownames(awares1_transpose)), NA)
+awares1_transpose$awares_ids <- ifelse(grepl("n_pct_353358909",rownames(awares1_transpose)), gsub(" n_pct_353358909|d_142654897_d_","", rownames(awares1_transpose)), "Total")
+awares1_transpose$CID3 <- as.integer(awares1_transpose$CID3)
+grab_aware <- y %>% filter(grepl(paste(awares1_transpose$CID3,collapse = "|"),y$conceptId.3)) %>% select(conceptId.3, Variable.Label)
+grab_aware<-grab_aware %>%  dplyr::rename(CID3=conceptId.3)
+
+Table16_awaresreasons <- merge(grab_aware[,c("CID3","Variable.Label")],awares1_transpose,by.x="CID3",by.y="CID3",all.y=TRUE)
+Table16_awaresreasons$Awareness <- ifelse(is.na(Table16_awaresreasons$CID3),"Total",ifelse(Table16_awaresreasons$CID3 == 0, "No Response Sent",Table16_awaresreasons$Variable.Label))
+
+#Table 17. Out Of Active Recruits Who Did Not Consent, Number And Percent Of Those Who Have Max Contact Attempts Reached
+reachout1 <- recruitsites  %>%filter(Frequency>0)%>% mutate('Outreach timed out' = "0 (0%)") %>% dplyr::rename(`Total Recruits` = Frequency)
+
+#Table 18. Distribution of Baseline Incentives Among Verified Participants from Chicago
+#a. Incentive Status :Incentive  eligible with issued
+#Incentive Eligible #Incentive Not Eligible # Total Verified Recruit,d_821240724==197316935
+
+incentive.CIDs <- sapply(strsplit(as.character(colnames(data)[grepl("d_130371375_d_266600170",colnames(data))]),"d_"),"[", 4)
+incentive.vars <- dd[which(grepl(paste(incentive.CIDs,collapse = "|"),dd$CID)),]
+incentive.vars$var.names <- paste("d_130371375_d_266600170_d",incentive.vars$CID,sep="_") 
+#          CID                         Variable Label            Variable Name                           var.names
+#  1: 222373868               NORC Payment Eligibility SMPaym_NORCPaymElig_v1r0 d_130371375_d_266600170_d_222373868
+#  2: 266600170                                   <NA>                 Baseline d_130371375_d_266600170_d_266600170
+#  3: 297462035 Date/Time payment given to participant       HDPaym_TmPaym_v1r0 d_130371375_d_266600170_d_297462035
+#  4: 320023644                            Case Number   HDPaym_CaseNumber_v1r0 d_130371375_d_266600170_d_320023644
+#  5: 438636757              Date/Time payment refused    HDPaym_TmRefused_v1r0 d_130371375_d_266600170_d_438636757
+#  6: 648228701                        Payment refused  HDPaym_PaymRefused_v1r0 d_130371375_d_266600170_d_648228701
+#  7: 648936790                         Payment issued   HDPaym_PaymIssued_v1r0 d_130371375_d_266600170_d_648936790
+#  8: 731498909                   Eligible for Payment     SMPaym_PaymElig_v1r0 d_130371375_d_266600170_d_731498909 ##all site
+#  9: 735399790                         Payment Chosen   HDPaym_PaymChosen_v1r0 d_130371375_d_266600170_d_735399790
+# 10: 787567527        Time Payment Eligible for Round   SMPaym_TmPaymElig_v1r0 d_130371375_d_266600170_d_787567527
+incentive <- data %>% select(Connect_ID,site,d_821247024,d_827220437,incentive.vars$var.names) %>%
+    mutate(Incentive_Eligible = case_when(d_130371375_d_266600170_d_731498909 == 353358909 ~ "Incentive Eligible",
+                                         d_130371375_d_266600170_d_731498909 == 104430631 ~ "Incentive Not Eligible"),
+           Payment_Issued = case_when(d_130371375_d_266600170_d_648936790 == 353358909 ~ "Payment Issued",
+                                      d_130371375_d_266600170_d_648936790 == 104430631 ~ "Payment Not Issued"),
+           Payment_Refused = case_when(d_130371375_d_266600170_d_648228701 == 353358909 ~ "Payment Refused",
+                                      d_130371375_d_266600170_d_648228701 == 104430631 ~ "Payment Not Refused"),
+           eligible_time =as.POSIXct(d_130371375_d_266600170_d_787567527),
+           issued_time=as.POSIXct(d_130371375_d_266600170_d_297462035),
+           declined_time=as.POSIXct(d_130371375_d_266600170_d_438636757))
+           
+incentive$Payment_Issued <- factor(incentive$Payment_Issued, levels=c("Payment Issued","Payment Not Issued"))   
+incentive$Payment_Refused <- factor(incentive$Payment_Refused, levels=c("Payment Refused","Payment Not Refused"))
+
+incentive$Tm_issued2eligible <- ifelse(incentive$d_130371375_d_266600170_d_648936790 == 353358909 & incentive$d_130371375_d_266600170_d_731498909==353358909, difftime(incentive$issued_time,incentive$eligible_time,units="day"),NA)
+
+summary(incentive$Tm_issued2eligible)
+incentive$Tm_issued2declined <- ifelse(incentive$d_130371375_d_266600170_d_648228701 & incentive$d_130371375_d_266600170_d_731498909==353358909, difftime(incentive$declined_time,incentive$eligible_time,units="day"),NA)
+
+chiago_ince <- incentive %>% filter(d_827220437 == 809703864) %>% 
+  dplyr::select( d_821247024,d_827220437,Connect_ID,contains("d_130371375_d_266600170"),
+         Payment_Issued,Payment_Refused,Incentive_Eligible,Tm_issued2declined)
+
+nonchico_inc <- incentive %>% filter(d_827220437 != 809703864 & d_827220437 >0) %>% 
+  select(contains("d_130371375_d_266600170"), d_821247024,d_827220437,Connect_ID,
+         Payment_Issued,Payment_Refused,Incentive_Eligible,Tm_issued2declined)
+  
+eligible_issued <- chiago_ince %>% filter(d_821247024==197316935) %>% 
+  select(Incentive_Eligible,Payment_Issued) %>%
+  tbl_cross(col = Incentive_Eligible,
+            row = Payment_Issued,
+            label =list(Incentive_Eligible ~"Eligible for Payment",
+                      Payment_Issued ~"Payment issued"),
+            percent = "row",
+            missing = "ifany",
+            margin_text = "Total Verified Recruit",
+            missing_text = "(Missing)")  %>%
+            add_n() %>%
+            bold_labels() %>%
+            italicize_levels() %>% 
+            modify_header(label ~ "**  Incentive Status**") %>%
+            modify_caption("**Table 18. Distribution of Baseline Incentives Among Verified Participants from Chicago**") %>%
+            as_kable() 
+
+eligible_refused <- chiago_ince %>% filter(d_821247024==197316935) %>% 
+  select(Incentive_Eligible,Payment_Refused) %>%
+  tbl_cross(col = Incentive_Eligible,
+            row = Payment_Refused,
+            label =list(Incentive_Eligible ~"Eligible for Payment",
+                        Payment_Refused ~"Payment Refused"),
+            percent = "row",
+            missing = "ifany",
+            margin_text = "Total Verified Recruit",
+            missing_text = "(Missing)")  %>%
+   bold_labels() %>%
+  italicize_levels() %>% 
+  modify_header(label ~ "**  Incentive Status**") %>%
+  as_kable() 
+
+#Table 19. Time From Incentive Eligible to Incentive Issued for Chicago
+#not available
+incentive$Payment_Issued <- factor(incentive$Payment_Issued, levels=c("Payment Issued","Payment Not Issued"))   
+incentive$Payment_Refused <- factor(incentive$Payment_Refused, levels=c("Payment Refused","Payment Not Refused"))
+
+incentive$Tm_issued2eligible <- ifelse(incentive$d_130371375_d_266600170_d_648936790 == 353358909 & incentive$d_130371375_d_266600170_d_731498909==353358909, difftime(incentive$issued_time,incentive$eligible_time,units="day"),NA)
+
+incentive$Tm_issued2declined <- ifelse(incentive$d_130371375_d_266600170_d_648228701 & incentive$d_130371375_d_266600170_d_731498909==353358909, difftime(incentive$declined_time,incentive$eligible_time,units="day"),NA)
+
+
+table56_Tm_IncentIssued <- incentive[complete.cases(incentive[,c("d_130371375_d_266600170_d_787567527","d_130371375_d_266600170_d_297462035")]),] %>% dplyr::filter(d_130371375_d_266600170_d_731498909 == 353358909 & d_130371375_d_266600170_d_648936790 == 353358909) %>% mutate(time=Tm_issued2eligible) %>% group_by(site) %>% dplyr::summarize(count=n(),
+                   min = min(time),
+                   q1 = quantile(time, 0.25),
+                   median = median(time),
+                   mean = mean(time),sd=sd(time),
+                   q3 = quantile(time, 0.75),
+                   max = max(time))
+
+results<-summary(chiago_ince$Tm_issued2eligible)
+# table(table56_Tm_IncentIssued$site)
+ #Tm_IncentIssued_UoC <- as.data.frame(aggregate(Tm_issued2eligible,chiago_ince,summary))
+# 
+# n_incentiveIssued <- table56_Tm_IncentIssued 
+
+ 
+#Table. 20.Distribution of Baseline Incentives Among Verified Participants from NORC-Issued Incentives
+nonch_eligible_issued <- nonchico_inc %>% filter(d_821247024==197316935) %>% 
+  select(Incentive_Eligible,Payment_Issued) %>%
+  tbl_cross(col = Incentive_Eligible,
+            row = Payment_Issued,
+            label =list(Incentive_Eligible ~"Eligible for Payment",
+                        Payment_Issued ~"Payment issued"),
+            percent = "row",
+            missing = "ifany",
+            margin_text = "Total Verified Recruit",
+            missing_text = "(Missing)")  %>%
+  bold_labels() %>%
+  italicize_levels() %>% 
+  modify_header(label ~ "Incentive Status") %>%
+  modify_caption("**Table 20. Distribution of Baseline Incentives Among Verified Participants from NORC-Issued Incentives**") %>%
+  as_kable() 
+
+nonch_eligible_refused <- nonchico_inc %>% filter(d_821247024==197316935) %>% 
+  select(Incentive_Eligible,Payment_Refused) %>%
+  tbl_cross(col = Incentive_Eligible,
+            row = Payment_Refused,
+            label =list(Incentive_Eligible ~"Eligible for Payment",
+                        Payment_Refused ~"Payment Refused"),
+            percent = "row",
+            missing = "ifany",
+            margin_text = "Total Verified Recruit",
+            missing_text = "(Missing)")  %>%
+  bold_labels() %>%
+  italicize_levels() %>% 
+  modify_header(label ~ "**  Incentive Status**") %>%
+  modify_caption("**Table 20. Distribution of Baseline Incentives Among Verified Participants from NORC-Issued Incentives**") %>%
+  as_kable() 
+
+##refusal and withdrawn
+#Revoked HIPAA Authorization Withdrew Consent Data Destruction  Requested Full Refusal of Active Participation Total Verified Recruits
+recruitsites <- as.data.frame(tab1(data[which(data$d_821247024 == 197316935),]$site)[[2]])
+recruitsites$site <- ifelse(grepl("Total",rownames(recruitsites)), "Total" , gsub("\\.","\\ \\", rownames(recruitsites)))
+
+recruitsites$`Total VerifiedRecruits` <- paste0(recruitsites$Frequency,"(",round(recruitsites$Percent,2), "%)")
+
+
+
+act_ls <- c("d_657475009",colnames(data)[grepl("685002411",colnames(data))])
+data$refact <- 0
+for (i in 1: length(act_ls)){
+  act_c <- ifelse((data[,act_ls[i]]==104430631 | is.na(data[,act_ls[i]])),0,1)
+  data$refact <- data$refact + act_c
+}
+
+#table(data$d_906417725,data$refact)
+
+#               0      1      4      6      
+#104430631 507498      1      1      1      
+#353358909      5      0      0      0      
+ref_wd_tb <- data[which(data$d_821247024 == 197316935),c("site","d_906417725","d_773707518","d_747006172","d_831041022","refact",act_ls)] 
+ref_wd_tb <- ref_wd_tb %>%  mutate(RefAllActiveVerified=ifelse( d_906417725==353358909  & refact==7, 353358909, 
+                                                      ifelse(d_906417725!=353358909 | refact <7 ,104430631,NA)),
+                        RefSomeActiveVerified=ifelse(d_906417725==353358909 | (refact<7  & refact>0)  , 353358909, 
+                                                     ifelse(d_906417725 ==353358909 & refact ==7 ,104430631,
+                                                     ifelse(d_906417725 ==104430631 & refact ==0 ,104430631, NA))),
+                        HIPAARevVer = ifelse( d_773707518 == 353358909  & d_747006172 == 104430631 & d_831041022 == 104430631, 353358909, 
+                                              ifelse( d_773707518 != 353358909  | d_747006172 != 104430631 | d_831041022 != 104430631,104430631, NA)),
+                        WdConsentVer = ifelse(d_747006172 == 353358909 & d_831041022 == 104430631, 353358909, 
+                                              ifelse(d_747006172 != 353358909  | d_831041022 != 104430631,104430631, NA)),
+                        DestroyDataVer = ifelse(d_831041022 == 353358909, 353358909, ifelse(d_831041022 != 353358909,104430631, NA)))
+
+refwd_var <- c("RefAllActiveVerified","HIPAARevVer","RefSomeActiveVerified","WdConsentVer","DestroyDataVer") 
+ref_wd <- list()
+for (i in 3:5){
+  
+  veri_tb <- ref_wd_tb[,c("site",refwd_var[i])]
+ #if(length((unique(veri_tb[,refwd_var[i]])))>1){
+  tmp <- eval(parse(text=paste("pct_tb(veri_tb$site,veri_tb$",refwd_var[i],")",sep="")))
+    colnames(tmp) <- paste(refwd_var[i],colnames(tmp))
+    tmp$site <- rownames(tmp)
+    ref_wd[[i]] <- as.data.frame(tmp)}
+  #else if(length((unique(veri_tb[,refwd_var[i]]))) == 1){ref_wd[[i]]  <- data.frame(first_column=levels(veri_tb$site),second_column=rep(0,times=length(levels(veri_tb$site))))}
+#possibleError <- tryCatch({grab <-  as.data.frame(flats_schem[which(grepl(id,flats_schem$field_path)),])}, error = function(e) NULL )
+
+#if(!is.null(possibleError)){
+
+refuse.withdrawls <- ref_wd[3:5]  %>% reduce(full_join, by='site') 
+refuse.withdrawls1 <- merge(refuse.withdrawls,recruitsites,by.x="site",by.y="site", all.y=TRUE) #variables=121
+
+refuse.withdrawls1 <- refuse.withdrawls1[which(refuse.withdrawls1$site!="NA "),which(grepl("n_pct_353358909",colnames(refuse.withdrawls1)) | colnames(refuse.withdrawls1) %in% c("site","Frequency"))]
+
+refuse.withdrawls1$`RefAllActiveVerified n_pct_353358909` <- "0 (0%)"
+refuse.withdrawls1$`HIPAARevVer n_pct_353358909`<- "0 (0%)"
+ 
+#table23 Reasons for Refusal or Withdrawal Among Those that Requested
+refwd_reasons <- c("d_919699172","d_141450621","d_576083042","d_431428747","d_121430614","d_523768810","d_639172801","d_175732191",
+                   "d_150818546","d_624030581","d_285488731","d_596510649","d_866089092","d_990579614","d_131458944","d_372303208",
+                   "d_777719027","d_620696506","d_352891568","d_958588520","d_875010152","d_404289911","d_538619788","d_734828170")
+refusal1 <- data[,c("Connect_ID","token","site","d_153713899","d_613641698","d_715390138",refwd_reasons)]
+
+refusal1$refwdcounts <- 0
+ref_reason <- list()
+for (i in 1:length(refwd_reasons)){
+  refwd.c <- ifelse(refusal1[,refwd_reasons[i]] ==104430631 | is.na(refusal1[,refwd_reasons[i]]), 0, 1)
+  refusal1$refwdcounts <- refusal1$refwdcounts + refwd.c
+  
+  dt <- data[which(data$d_827220437>0),c("site",refwd_reasons[i])]
+  colnames(dt)[2] <- "refwd_reason"
+  dt_c <- dt %>%  dplyr::group_by(site,refwd_reason) %>% dplyr::summarise(count=n()) 
+  dt_c <- dt_c %>% group_by(refwd_reason) %>%mutate(n_pct=paste0(count,"( ",round(100*count/sum(count),2), "%)"))
+  colnames(dt_c)[3:4] <- paste(colnames(dt_c)[3:4],i,sep="_")
+  dt_c$reason.type <- refwd_reasons[i]
+  ref_reason[[i]] <- dt_c
+}
+
+ref_wd_reasons <- ref_reason %>% reduce(full_join,by=c("site","refwd_reason"))
+count <- colnames(ref_wd_reasons)[grepl("count", colnames(ref_wd_reasons))]
+ref_wd_reasons1 <- ref_wd_reasons %>%  dplyr::filter(refwd_reason==353358909)
+
+ref_wd_reasons1 <- ref_wd_reasons1 %>%  select(-contains("reason.type")) 
+
+refwd_reasons.all <- as.data.frame(t(colSums(ref_wd_reasons1[,(colnames(ref_wd_reasons1)%in% count)], na.rm=TRUE )))
+refwd_reasons.all$site <- "Total"
+
+refwd_reasons.labels <- unique(dd[which(grepl(paste(sapply(strsplit(refwd_reasons,"_"),"[",2),collapse = "|"),dd$CID)),c("CID","Variable Label")])
+
+colnames(refwd_reasons.all)[1:24] <- refwd_reasons
+
+ref_wd_reasons2<- ref_wd_reasons1  %>%  select(site,contains("n_pct")) 
+ref_wd_reasons2[is.na(ref_wd_reasons2)] = "0 (0%)"
+
+colnames(ref_wd_reasons2)[3:26] <- refwd_reasons
+ref_wd_reasons_all <-as.data.frame(t(rbind(ref_wd_reasons2[,c(2:26)],refwd_reasons.all)[,c(2:25)]))
+colnames(ref_wd_reasons_all) <- c(as.character(ref_wd_reasons$site[unique(ref_wd_reasons$site)]),refwd_reasons.all$site)
+ref_wd_reasons_all$refusal_withdrawl_labels <-  unique(dd[which(grepl(paste(sapply(strsplit(rownames(ref_wd_reasons_all),"_"),"[",2),collapse = "|"),dd$CID)),"Variable Label"])
+
+###Tables 24 Completion of Baseline Activities among Verified Participants of All sites and each site individually,25:34
+data$basesvcomplt <- ifelse(data$d_949302066 %in% c(615768760,972455046, NA) ,"None",
+    ifelse(data$d_949302066 == 231311385 & data$d_536735468 == 231311385 & data$d_663265240 == 231311385 & data$d_976570371 == 231311385, "All",
+       ifelse(data$d_949302066 == 231311385 & data$d_536735468 != 231311385 & data$d_663265240 != 231311385 & data$d_976570371 != 231311385 , "BOH only",
+              "2 or 3 sections")))
+
+#data$survey_complete <- factor(data$basesvcomplt,levels=c("Yes","No"),order=TRUE)
+
+data$baseMcomplt_all <- ifelse(data$basesvcomplt == "All", "Completed all 4 modules",ifelse(data$basesvcomplt == "None","Did Not complete Any Modules","Complete Some But Not All 4 Modules"))
+
+data$biospeDonation <- ifelse(data$d_878865966 == 104430631 & data$d_167958071 == 104430631 & data$d_684635302 == 104430631 ,"No Any Sample Donations",
+                              ifelse(data$d_878865966 == 353358909 & data$d_167958071 == 353358909 & data$d_684635302 == 353358909,"Completed All 3 Sample Donations", "Completed Some but Not All 3 Sample Donations"))
+
+Modbiospe.All <- data %>% filter(d_821247024==197316935 & d_827220437>0) %>% 
+  select(baseMcomplt_all,biospeDonation) %>%
+  tbl_cross(col = baseMcomplt_all,
+            row = biospeDonation,
+            label =list(),
+            percent = "row",
+            missing = "ifany",
+            margin_text = "Total Verified Recruits",
+            missing_text = "(Missing)")  %>%
+  bold_labels() %>%
+  italicize_levels() %>% 
+  modify_header(label ~ "Incentive Status") %>%
+  modify_caption("Table 24.Completion of Baseline Activities among Verified Participants of All sites") %>%
+  as_kable() 
+
+Modbiospe.site <- list()
+for(i in 1:9){
+ n<- 24+i
+  Modbiospe.site[[i]] <- data %>% filter(d_821247024==197316935 & site == levels(data$site)[i]) %>%
+    select(baseMcomplt_all,biospeDonation) %>%
+    tbl_cross(col = baseMcomplt_all,
+              row = biospeDonation,
+              label =list(),
+              percent = "row",
+              missing = "ifany",
+              margin_text = "Total Verified Recruits",
+              missing_text = "(Missing)")  %>%
+    bold_labels() %>%
+    italicize_levels() %>% 
+    modify_header(label ~ "**  Baseline Surveys' Completions**") %>%
+    modify_caption(paste0("\"**Table", n,". Completion of Baseline Activities among Verified Participants of ",levels(data$site)[i],"**\"")) %>%
+    as_kable()
+}
+
+##This is a list of people who have completed their baseline surveys (all 4 modules) and have not yet given any biospecimens.
+ veri_surM_bios <- data %>% filter(d_821247024==197316935) %>% select(Connect_ID, token,d_821247024,d_827220437,d_949302066,d_536735468,d_663265240,d_976570371,d_878865966,d_167958071,d_684635302) %>%
+   mutate(basesurv.cmplt =case_when(d_949302066 == 231311385 & d_536735468 == 231311385 & d_663265240 == 231311385 & d_976570371 == 231311385 ~ 1,
+                                    d_949302066 != 231311385 | d_536735468 != 231311385 | d_663265240 != 231311385 | d_976570371 != 231311385 ~ 0),
+          biospe.cmplt = case_when(d_878865966 == 353358909 & d_167958071 == 353358909 & d_684635302 == 353358909 ~ 1,
+                                   d_878865966 != 353358909 | d_167958071 != 353358909 | d_684635302 != 353358909 ~ 0),
+          AllModules = case_when(d_949302066 == 231311385 & d_536735468 == 231311385 & d_663265240 == 231311385 & d_976570371 == 231311385 ~ "Completed all 4 modules",
+                                    d_949302066 != 231311385 | d_536735468 != 231311385 | d_663265240 != 231311385 | d_976570371 != 231311385 ~ "Did not complete all 4 modules"),
+         NoSamples = case_when(d_878865966 == 104430631 & d_167958071 == 104430631 & d_684635302 == 104430631 ~ "Has not given any biospecimens",
+                               d_878865966 != 104430631 | d_167958071 != 104430631 | d_684635302 != 104430631 ~ "Has given biospecimens"),
+          Site = case_when(d_827220437 == 125001209 ~ "KPCO",
+                           d_827220437 == 327912200  ~ "KPGA",
+                           d_827220437 == 300267574  ~ "KPHI" ,
+                           d_827220437 == 452412599  ~ "KPNW",
+                           d_827220437 == 303349821  ~ "Marshfield",
+                           d_827220437 == 531629870  ~ "HP",
+                           d_827220437 == 548392715  ~ "HFHS",
+                           d_827220437 == 657167265  ~ "SH",
+                           d_827220437 == 809703864  ~ "UoCh",
+                           d_827220437 == 517700004 | d_827220437 == 181769837 ~ "NIH"))
+
+ ###biospecimen outreach data
+ biospe_outreach <- veri_surM_bios %>% filter(biospe.cmplt==0 & basesurv.cmplt==1) %>% 
+  mutate(AllModules = case_when(d_949302066 == 231311385 & d_536735468 == 231311385 & d_663265240 == 231311385 & d_976570371 == 231311385 ~ "Completed all 4 modules",
+                                    d_949302066 != 231311385 | d_536735468 != 231311385 | d_663265240 != 231311385 | d_976570371 != 231311385 ~ "Did not complete all 4 modules"),
+         NoSamples = case_when(d_878865966 == 104430631 & d_167958071 == 104430631 & d_684635302 == 104430631 ~ "Has given biospecimens",
+                               d_878865966 != 104430631 | d_167958071 != 104430631 | d_684635302 != 104430631 ~ "Has not given any biospecimens") ) %>% select(Site,Connect_ID,AllModules,NoSamples)
+
+# bq_auth()
+ for (site in unique(veri_surM_bios$Site)) { 
+    biospe_outreach <- veri_surM_bios %>% filter(NoSamples=="Has not given any biospecimens" & Site==site) %>% dplyr::select(Site,Connect_ID,AllModules,NoSamples)
+
+# eval(parse(text=paste("box_write(object = biospe_outreach, file_name = \"Biospecimen_Outreach_", site,currentDate, ".csv\",
+ #           description = \"Connect Prod Nobiospecimen with all Modules Completions,", currentDate,"\")",sep=""))) 
+ 
+ #eval(parse(text=paste("write.csv(biospe_outreach,\"~/Documents/Connect_projects/Biospecimen_Feb2022/Jing_projects/biospecQC_03082022/data/Biospecimen_Outreach_", site, "_",currentDate,".csv\")",sep="")))
+
+} 
+  
+ ###incentive data
+  incentive <- data %>% filter(d_130371375_d_266600170_d_731498909==353358909 & d_827220437==809703864) %>% dplyr::select(token,site,d_130371375_d_266600170_d_731498909,d_130371375_d_266600170_d_222373868,d_130371375_d_266600170_d_787567527)  
+  
+  incentive <- incentive %>% mutate(Eligible.for.Payment=case_when(d_130371375_d_266600170_d_731498909 ==353358909~"YES"),
+          NORC.Payment.Eligibility=case_when(d_130371375_d_266600170_d_222373868 ==353358909 ~"YES",
+                                     d_130371375_d_266600170_d_222373868 ==104430631 ~"NO"),
+          Time.Payment.Eligible.for.Round = ymd_hms(d_130371375_d_266600170_d_787567527))
+   
+#  box_auth(client_id = "627lww8un9twnoa8f9rjvldf7kb56q1m",
+#            client_secret = "gSKdYKLd65aQpZGrq9x4QVUNnn5C8qqm")
+# 
+#   box_setwd(dir_id = 167284102961) 
+#   currentDate <- Sys.Date()
+#                                   
+# box_write(object = incentive, file_name ="Incentives_Weekly_Report_12192022.csv")
+# box.com remote file reference
+# 
+#  name        : Incentives_Weekly_Report_12192022.csv 
+#  file id     : 1094983956901 
+#  version     : V1 
+#  size        : 29 kB 
+#  modified at : 2022-12-19 15:28:03 
+#  created at  : 2022-12-19 15:28:03 
+#  uploaded by : wuj12@nih.gov 
+#  owned by    : brotzmanmj@nih.gov 
+#  shared link : None 
+# 
+#  parent folder name :  NORC Incentive Eligible Reports_DCEG 
+#  parent folder id   :  167284102961 
+```
+
+## R Markdown
+
+This is a CCC weekly report on Connect recruitment table on recruitment process, incentive, demographics, survey modules, biospecimen collections on Dec.16, 2022.
+
+```{r,results = 'asis',echo=FALSE, tab.cap = NULL}
+knitr::kable(recruittypetotal[,c(4,1:3)], caption = 'Table 1. All Records in Connect', row.names=FALSE, align=c("l", "c", "c", "c"))
+#table1_records
+table2_verified
+table3_verifiedtype %>% kable_styling(latex_options = c("striped", "scale_down"))
+#knitr::kable(veritypes_1, caption = 'Table 4. Verification Mode of Those Successfully Verified', row.names=FALSE, align=c("l", "c", "c", "c", "c"))
+knitr::kable(verinot_site[,c(1,5,2)],caption='Table 4. Cannot Be Verified', row.names=FALSE, align=c("l", "c", "c"))
+knitr::kable(reasons1[c(1:8,10,9),], caption = 'Table 5. Reason Cannot Be Verified', row.names=FALSE, align=c("l", "c", "c","c", "c", "c", "c", "c", "c", "c"))%>% kable_styling(latex_options = c("striped", "scale_down"))
+knitr::kable(cancer_site[,c(1,5,2)],caption = 'Table 6. Previous Cancer', row.names=FALSE,align=c("l","c","c") )
+knitr::kable(Table7_optreasons[,c(2:9,11:13),],caption = 'Table 7. Pre-Consent Opt-Out Reasons Among Those that Opted Out', row.names=FALSE, align=c("l", "c", "c","c", "c", "c", "c", "c", "c", "c","c","c"))%>%  kable_styling(latex_options = c("striped", "scale_down"))%>% landscape()
+
+table8_successcamptype %>% kable_styling(latex_options = c("striped", "scale_down"))%>% landscape()
+
+table9_Totalactivecamp %>% kable_styling(latex_options = c("striped", "scale_down"))%>% landscape()
+
+knitr::kable(table10_Tm_recr_sign1,digits=2,caption = 'Table 10. Time from Active Recruitment to Sign In by days', row.names=FALSE, digigts=2,align=c("l", "c", "c","c", "c", "c", "c", "c", "c")) %>% kable_styling(latex_options = c("striped", "scale_down"))
+
+knitr::kable(table11_Tm_signin_cst,digits=2,caption = 'Table 11. Time from Sign In to Consent by days',digigts=2, row.names=FALSE, align=c("l", "c", "c","c", "c", "c", "c", "c", "c")) %>% kable_styling(latex_options = c("striped", "scale_down"))
+
+knitr::kable(table12_Tm_consent_prof,digits=2,caption = 'Table 12. Time from Consented to UP Submitted by dayss', row.names=FALSE, digigts=2, align=c("l", "c", "c","c", "c", "c", "c", "c", "c"))  %>% kable_styling(latex_options = c("striped", "scale_down"))
+
+knitr::kable(table13_Tm_prof_verif,digits=2,caption = 'Table 13. Time from UP Submitted to Verification Complete by days', row.names=FALSE, digigts=2, align=c("l", "c", "c","c", "c", "c", "c", "c", "c")) %>% kable_styling(latex_options = c("striped", "scale_down"))
+
+knitr::kable(table14_Tm_enroll_verif,digits=2,caption = 'Table 14. Total Enrollment Time by days', row.names=FALSE, digigts=2, align=c("l", "c", "c","c", "c", "c", "c", "c", "c")) %>% kable_styling(latex_options = c("striped", "scale_down"))%>%landscape()
+
+ signin_methods1 %>%  kable_styling(latex_options = c("striped", "scale_down"))%>%landscape()
+ 
+ knitr::kable(Table16_awaresreasons[,c(15,3:9,11:13),],caption = 'Table 16. How Recruit Heard About Study', row.names=FALSE, align=c("l", "c", "c","c", "c", "c", "c", "c", "c", "c","c","c"))  %>% kable_styling(latex_options = c("striped", "scale_down"))%>% landscape()
+ 
+ knitr::kable(reachout1[,c(4,5,1)], caption = 'Table 17. Outreach Timed Out', row.names=FALSE, align=c("l", "c", "c", "c"))
+```
+ 
+##Incentive part by UoC and NORC 
+Till now no incentive payments have been issued to the eligible participants in UoC site
+```{r,results = 'asis',echo=FALSE, tab.cap = NULL}
+ 
+ eligible_issued 
+ eligible_refused
+ 
+ nonch_eligible_issued
+ nonch_eligible_refused
+ 
+ knitr::kable(table56_Tm_IncentIssued,caption ='Table 19. Time From Incentive Eligible to Incentive Issued for NORC', row.names=FALSE,  digigts=2, align=c("l", "c", "c","c", "c", "c", "c", "c", "c"))  %>% kable_styling(latex_options = "scale_down")%>% landscape() 
+ 
+ knitr::kable(refuse.withdrawls1[c(1:8,10,9),c(1,7,3,4,2,6,5)],caption='Table 22. Refusals and Withdrawals Among All Verified Participants', row.names=FALSE, align=c("l","c","c","c","c","c"),col.names = c("Site","Revoked HIPAA Authorization", "Withdrew Consent", "Data Destruction", "Refusal of Any Study Activities", "Refusal of All Study Activities", "Total Verified Recruits"),format = "latex", booktabs = TRUE) %>% kable_styling(latex_options = c("striped", "scale_down")) %>% landscape()
+ 
+ knitr::kable(ref_wd_reasons_all[,c(11,1:10)],caption='Table 23. Reasons for Refusal or Withdrawal Among Those that Requested',caption.short = "Reasons for Refusal/Withdrawl.",row.names=FALSE,align=c("l","c","c","c","c","c","c","c","c","c")) %>% kable_styling(latex_options = c("striped", "scale_down"))%>%landscape()
+ 
+ #table24
+ Modbiospe.All%>% kable_styling(latex_options = c("striped", "scale_down")) %>% landscape()
+# 
+for (i in 1:9){print(Modbiospe.site[[i]] %>% kable_styling(latex_options =c("striped", "scale_down"))%>%landscape())}
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+Fig1_verified_time
+
+# ggplot(veri_allsites,aes(y=Total.verified, x=as.Date(verified.week.date),color=site)) + geom_line() +    geom_point()+
+#   scale_y_continuous(name="# Verified", limits=c(0,800)) +
+#   scale_x_date(name="date",date_labels = "%y-%m-%d", date_breaks = "2 week")  +
+#   ggtitle("Number Verified Over Time")+
+#   theme( axis.text.x=element_text(angle=60, hjust=1), axis.title.x = element_text( size = 14, face = "bold") ,
+#          axis.title.y = element_text(size = 14, face = "bold",color="black"),
+#          plot.title = element_text(face="bold", size=18),
+#          # Remove panel border
+#          panel.border = element_blank(),  
+#          # Remove panel grid lines
+#          panel.grid.major = element_blank(),
+#          panel.grid.minor = element_blank(),
+#          # Remove panel background
+#          panel.background = element_blank(),
+#          # Add axis line
+#          axis.line = element_line(colour = "grey") ,
+#          ##put the legend in the plot
+#          legend.position = c(.2, .6),
+#          legend.margin = margin(1, 1, 1, 1)
+#   ) 
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
