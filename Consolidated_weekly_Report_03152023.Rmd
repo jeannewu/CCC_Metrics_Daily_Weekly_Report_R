@@ -3381,10 +3381,24 @@ table62_sexall %>% kable_styling(latex_options = "scale_down")%>% footnote(gener
 
 ```{r,echo=FALSE,include=FALSE}
 ##to get the refusal and withdrawl data
+library(usethis)
+##to get the refusal and withdrawl data
 currentDate <- Sys.Date()
+box_auth(client_id =Sys.getenv("BOX_CLIENT_ID"),
+         client_secret =Sys.getenv("BOX_CLIENT_SECRET"))
+
 outputpath <- "~/Documents/Connect_projects/Biospecimen_Feb2022/Jing_projects/biospecQC_03082022/data/"
 # ##to create a data of the particpants with previous cancer history among those user profile complete
-write.csv(ca_hist[,c("token","Connect_ID","site", "age","sex", "race","Verification status","Recruitment type","User Profile submitted","Previous Cancer","Cancer Year","RcrtV_CStatusMatch_v1r0")], paste(outputpath,"prod_previous_cancer_cases_profile_complete_",currentDate,".csv",sep=""), row.names = F,na="")
+ca_hist$date <- currentDate
+write.csv(ca_hist[,c("date","token","Connect_ID","site", "age","sex", "race","Verification status","Recruitment type",
+                     "User Profile submitted","RcrtSI_TypeTime_v1r0","RcrtUP_SubmitTime_v1r0","Cancer Type",
+                     "Cancer Comments","Previous Cancer","Cancer Year","RcrtV_CStatusMatch_v1r0")], paste(outputpath,"prod_previous_cancer_cases_profile_complete_",currentDate,".csv",sep=""), row.names = F,na="")
+
+box_setwd(dir_id=191948877738)
+box_write(object = ca_hist[,c("date","token","Connect_ID","site", "age","sex", "race","Verification status","Recruitment type",
+                              "User Profile submitted","RcrtSI_TypeTime_v1r0","RcrtUP_SubmitTime_v1r0","Cancer Type",
+                              "Cancer Comments","Previous Cancer","Cancer Year","RcrtV_CStatusMatch_v1r0")], 
+                              paste("prod_previous_cancer_cases_profile_complete_",currentDate,".csv",sep=""),row.names = F,na="")
 
 # # 
 
@@ -3496,8 +3510,7 @@ for (i in 1:length(refwd_date1)){
 refwd.cases.notes <- tmp[,which(grepl("v1r0", colnames(tmp)) | colnames(tmp) %in% c("Connect_ID","token","site","verified","reasons","date.max","case.dates","recrt_steps_v1r0"))]
 
 currentDate <- Sys.Date()
-box_auth(client_id = "627lww8un9twnoa8f9rjvldf7kb56q1m",
-         client_secret = "gSKdYKLd65aQpZGrq9x4QVUNnn5C8qqm")
+
 box_setwd(dir_id = 141543243283) #/CONNECT_DCEG ONLY/Connect Reports_DCEG ONLY/Refusal and Withdrawal Reports_DCEG
 
 box_write(object = refwd.cases.notes[,which(!grepl("Date",colnames(refwd.cases.notes)))], file_name =paste("RefusalWithdrawl_cases_",currentDate,".csv",sep=""),row.names = F,na="")
@@ -3511,8 +3524,9 @@ for (i in 1:length(levels(refwd.cases.notes$site))) {
   # id=folder[i]
   # box_setwd(dir_id = id)
   # box_write(object =refwd.cases.notes[which(refwd.cases.notes$site == levels(refwd.cases.notes$site)[i]), which(!grepl("Date",colnames(refwd.cases.notes)))],file_name=paste("RefusalWithdrawl_cases_",site,currentDate,".csv",sep=""),row.names = F,na="") #to save the box folders
-  
-  write.csv(refwd.cases.notes[which(refwd.cases.notes$site == levels(refwd.cases.notes$site)[i]),which(!grepl("Date",colnames(refwd.cases.notes)))],paste(outputpath,"RefusalWithdrawl_cases_",site,currentDate,".csv",sep=""),row.names = F,na="")
+  site <- levels(refwd.cases.notes$site)[i]
+  write.csv(refwd.cases.notes[which(refwd.cases.notes$site == levels(refwd.cases.notes$site)[i]),
+                              which(!grepl("Date",colnames(refwd.cases.notes)))],paste(outputpath,"RefusalWithdrawl_cases_",site,currentDate,".csv",sep=""),row.names = F,na="")
 }
 
 box_setwd(dir_id=141622949146)
@@ -3584,51 +3598,6 @@ biospe_outreach <- veri_surM_bios %>% filter(biospe.cmplt==0 & basesurv.cmplt==1
          NoSamples = case_when(d_878865966 == 104430631 & d_167958071 == 104430631 & d_684635302 == 104430631 ~ "Has given biospecimens",
                                d_878865966 != 104430631 | d_167958071 != 104430631 | d_684635302 != 104430631 ~ "Has not given any biospecimens") ) %>% select(Site,Connect_ID,AllModules,NoSamples)
 
-# for (site in unique(veri_surM_bios$Site)) {
-#     biospe_outreach <- veri_surM_bios %>% filter(NoSamples=="Has not given any biospecimens" & Site==site) %>% dplyr::select(Site,Connect_ID,AllModules,NoSamples)
-#
-# write.csv(biospe_outreach,paste("~/Documents/Connect_projects/Biospecimen_Feb2022/Jing_projects/biospecQC_03082022/data/Biospecimen_Outreach_", site, "_",currentDate,".csv",sep=""),row.names = F,na="")
-# }
-# HP: https://nih.app.box.com/folder/181137100949
-# SH: https://nih.app.box.com/folder/181135654302
-# Marshfield: https://nih.app.box.com/folder/180317179457
-# KPCO: folder not created yet since they have not requested this report yet, but you can create a folder here if/when they do https://nih.app.box.com/folder/142480515611
-# KPGA: folder not created yet since they have not requested this report yet, but you can create a folder here if/when they do https://nih.app.box.com/folder/142482311776
-# KPHI: folder not created yet since they have not requested this report yet, but you can create a folder here if/when they do https://nih.app.box.com/folder/142482837728
-# KPNW: folder not created yet since they have not requested this report yet, but you can create a folder here if/when they do https://nih.app.box.com/folder/142482134697
-# HFHS: https://nih.app.box.com/folder/180318540046
-# UC: folder not created yet since they have not requested this report yet, but you can create a folder here if/when they do https://nih.app.box.com/folder/141623373381
-
-# box_setwd(dir_id=181137100949)
-# biospe_outreach_HP <- veri_surM_bios %>% filter(NoSamples=="Has not given any biospecimens" & Site=="HealthPartners") %>% dplyr::select(Site,Connect_ID,AllModules,NoSamples)
-# box_write(object = biospe_outreach_HP,file_name=paste("Biospecimen_Outreach_HealthPartner_",currentDate,".csv",sep=""),row.names = F,na="")
-#  
-# box_setwd(dir_id=180318540046)
-# biospe_outreach_HFHS <- veri_surM_bios %>% filter(NoSamples=="Has not given any biospecimens" & Site=="Henry Ford Health System") %>% dplyr::select(Site,Connect_ID,AllModules,NoSamples)
-# box_write(object = biospe_outreach_HFHS,file_name=paste("Biospecimen_Outreach__Henry_Ford_ Health_System_",currentDate,".csv",sep=""),row.names = F,na="")
-#  
-# box_setwd(dir_id=180317179457)
-# box_write(object = veri_surM_bios[which(veri_surM_bios$NoSamples=="Has not given any biospecimens" & veri_surM_bios$Site == "Marshfield Clinic Health System"),c("Site","Connect_ID","AllModules","NoSamples")],file_name=paste("Biospecimen_Outreach_Marshfield_ Clinic_Health_System_",currentDate,".csv",sep=""),row.names = F,na="")
-#  
-# box_setwd(dir_id=181135654302)
-# box_write(object = veri_surM_bios[which(veri_surM_bios$NoSamples=="Has not given any biospecimens" & veri_surM_bios$Site == "Sanford Health"), c("Site","Connect_ID","AllModules","NoSamples")], file_name=paste("Biospecimen_Outreach_Sanford_ Health_",currentDate,".csv",sep=""),row.names = F,na="")
-#  
-# box_setwd(dir_id=141623373381)
-# box_write(object = veri_surM_bios[which(veri_surM_bios$NoSamples=="Has not given any biospecimens" & veri_surM_bios$Site == "University of Chicago Medicine"),c("Site","Connect_ID","AllModules","NoSamples")], file_name=paste("Biospecimen_Outreach__University_of_ Chicago_Medicine_",currentDate,".csv",sep=""), row.names = F,na="")
-# 
-# box_setwd(dir_id=142482879711)
-# box_write(object = veri_surM_bios[which(veri_surM_bios$NoSamples=="Has not given any biospecimens" & veri_surM_bios$Site == "Kaiser Permanente Colorado"),c("Site","Connect_ID","AllModules","NoSamples")], file_name=paste("Biospecimen_Outreach__Kaiser_ Permanente_Colorado_",currentDate,".csv",sep=""),row.names = F,na="")
-# 
-# box_setwd(dir_id=,142480938244)
-# box_write(object = veri_surM_bios[which(veri_surM_bios$NoSamples=="Has not given any biospecimens" & veri_surM_bios$Site == "Kaiser Permanente Georgia"), c("Site","Connect_ID","AllModules","NoSamples")], file_name=paste("Biospecimen_Outreach_Kaiser Permanente Georgia_",currentDate,".csv",sep=""),row.names = F,na="")
-
-# box_setwd(dir_id=142481904303)
-# box_write(object = refwd.cases.notes[which(refwd.cases.notes$site == "Kaiser Permanente Hawaii"), which(!grepl("Date",colnames(refwd.cases.notes)))],file_name=paste("Biospecimen_Outreach_Kaiser _Permanente_Hawai_",currentDate,".csv",sep=""),row.names = F,na="")
-# 
-# box_setwd(dir_id=142481813411)
-# box_write(object = refwd.cases.notes[which(refwd.cases.notes$site == "Kaiser Permanente Northwest"), which(!grepl("Date",colnames(refwd.cases.notes)))], file_name=paste("Biospecimen_Outreach_Kaiser_ Permanente_Northwest_", currentDate, ".csv",sep=""),row.names = F,na="")
-# 
-
 
 ```
 
@@ -3640,32 +3609,37 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 currentDate <- Sys.Date()
 ###to generate the date for each activity
 # # # ##incentive data
-incentive <- data %>% dplyr::filter(d_130371375_d_266600170_d_731498909==353358909 & d_827220437==809703864) %>% dplyr::select(token,site,d_130371375_d_266600170_d_731498909,d_130371375_d_266600170_d_222373868,d_130371375_d_266600170_d_787567527)
+# # # ##incentive data
+incentive <- data %>% dplyr::filter(d_130371375_d_266600170_d_731498909==353358909 & d_827220437==809703864) %>% dplyr::select(token,site,d_130371375_d_266600170_d_731498909,d_130371375_d_266600170_d_222373868,d_130371375_d_266600170_d_787567527,d_130371375_d_266600170_d_945795905)
 
 incentive <- incentive %>% mutate(Eligible.for.Payment=case_when(d_130371375_d_266600170_d_731498909 ==353358909~"YES"),
                                   NORC.Payment.Eligibility=case_when(d_130371375_d_266600170_d_222373868 ==353358909 ~"YES",
                                                                      d_130371375_d_266600170_d_222373868 ==104430631 ~"NO"),
-                                  Time.Payment.Eligible.for.Round = ymd_hms(d_130371375_d_266600170_d_787567527))
+                                  Time.Payment.Eligible.for.Round = ymd_hms(d_130371375_d_266600170_d_787567527),
+                                  "Payment Chosen" = d_130371375_d_266600170_d_945795905)
 
-incentive_nonchi <- data %>% dplyr::filter(d_130371375_d_266600170_d_731498909==353358909 & d_827220437!=809703864) %>% dplyr::select(token,site,d_130371375_d_266600170_d_731498909,d_130371375_d_266600170_d_222373868,d_130371375_d_266600170_d_787567527)
+incentive_nonchi <- data %>% dplyr::filter(d_130371375_d_266600170_d_731498909==353358909 & d_827220437!=809703864) %>% dplyr::select(token,site,d_130371375_d_266600170_d_731498909,d_130371375_d_266600170_d_222373868,d_130371375_d_266600170_d_787567527,d_130371375_d_266600170_d_945795905)
 
 incentive_nonchi <- incentive_nonchi %>% mutate(Eligible.for.Payment=case_when(d_130371375_d_266600170_d_731498909 ==353358909~"YES"),
                                                 NORC.Payment.Eligibility=case_when(d_130371375_d_266600170_d_222373868 ==353358909 ~"YES",
                                                                                    d_130371375_d_266600170_d_222373868 ==104430631 ~"NO"),
-                                                Time.Payment.Eligible.for.Round = ymd_hms(d_130371375_d_266600170_d_787567527))
+                                                Time.Payment.Eligible.for.Round = ymd_hms(d_130371375_d_266600170_d_787567527),
+                                                `Payment Chosen`=d_130371375_d_266600170_d_945795905)
 
 box_auth(client_id = "627lww8un9twnoa8f9rjvldf7kb56q1m",
          client_secret = "gSKdYKLd65aQpZGrq9x4QVUNnn5C8qqm")
 
 box_setwd(dir_id = 167284102961)
 
-box_write(object = incentive[,c("token","site","NORC.Payment.Eligibility","Eligible.for.Payment","Time.Payment.Eligible.for.Round")], file_name =paste("Incentives_Weekly_Report_NORC",currentDate,".csv",sep=""))
+ box_write(object = incentive[,c("token","site","NORC.Payment.Eligibility","Eligible.for.Payment","Time.Payment.Eligible.for.Round")],
+file_name =paste("Incentives_Weekly_Report_UChicago",currentDate,".csv",sep=""))
 
-write.csv(incentive[,c("token","site","NORC.Payment.Eligibility","Eligible.for.Payment","Time.Payment.Eligible.for.Round")],paste(outputpath,"Incentives_Weekly_Report_NORC",currentDate,".csv", sep=""),na="",row.names=F)
+write.csv(incentive[,c("token","site","NORC.Payment.Eligibility","Eligible.for.Payment","Time.Payment.Eligible.for.Round")],
+          paste(outputpath,"Incentives_Weekly_Report_UChicago_",currentDate,".csv", sep=""),na="",row.names=F)
 
-box_write(object = incentive_nonchi[,c("token","site","NORC.Payment.Eligibility","Eligible.for.Payment","Time.Payment.Eligible.for.Round")], file_name =paste("Incentives_Weekly_Report_OTHERSITES_",currentDate,".csv",sep=""))
+box_write(object = incentive_nonchi[,c("token","site","NORC.Payment.Eligibility","Eligible.for.Payment","Time.Payment.Eligible.for.Round")], file_name =paste("Incentives_Weekly_Report_NORC_",currentDate,".csv",sep=""))
 
-write.csv(incentive_nonchi[,c("token","site","NORC.Payment.Eligibility","Eligible.for.Payment","Time.Payment.Eligible.for.Round")],paste(outputpath,"Incentives_Weekly_Report_OTHERSITES_",currentDate,".csv", sep=""),na="",row.names=F)
+write.csv(incentive_nonchi[,c("token","site","NORC.Payment.Eligibility","Eligible.for.Payment","Time.Payment.Eligible.for.Round")],paste(outputpath,"Incentives_Weekly_Report_NORC_",currentDate,".csv", sep=""),na="",row.names=F)
 
 ```
 
@@ -3691,6 +3665,13 @@ modules <- c("d_100767870","d_949302066","d_536735468","d_663265240","d_97657037
 #d_173836415_d_266600170_d_139245758                                 Date/time Clinical Urine Collected
 # d_173836415_d_266600170_d_982213346                                 Date/time Clinical Blood Collected
 #on the clinical biospecimen collection that not every participants had their blood or urine collection time as d_173836415_d_266600170_d_982213346 Date/time Clinical Blood Collected (BioClin_ClinBloodTime_v1r0), but all of participants with clinical blood collections should have their blood receiving time as d_173836415_d_266600170_d_398645039 (BioClin_DBBloodRRLDt_v1r0), same as the clinical urine collections, confirmed with Michelle "that sounds right. The clinical collection times BioClin_ClinBloodTime_v1r0 and BioClin_ClinUrineTime_v1r0 will come a few days later." Therefore, when the collection times of clinical collection are not prompt updated (available), the receiving time can be altenative for those clinical collection without collection times.
+##July. 10, 2023, as Michelle and Amelia asked to update the completion concept as the completions of both 
+###baseline surveys and blood collection as yes, I now update the weekly log tables on July. 22
+###request via Github https://github.com/Analyticsphere/metricsReportsRequests/issues/39:
+# #(3) Cumulative Completed All Participant Study Activities
+# #(4) Completed All Participant Study Activity Response Ratio among Invited = Completed All Activities/ Invited
+# #(5) Completed All Participant Study Activity Response Ratio among Verified = Completed All Activities/ Verified
+# #(6) Completed all Participant Study Activities per week
 
 bio.col <- c("d_684635302","d_878865966", "d_167958071", "d_173836415_d_266600170_d_915179629", "d_173836415_d_266600170_d_718172863", "d_173836415_d_266600170_d_592099155", "d_173836415_d_266600170_d_561681068", "d_173836415_d_266600170_d_847159717", "d_173836415_d_266600170_d_448660695", "d_173836415_d_266600170_d_139245758", "d_173836415_d_266600170_d_541311218", "d_173836415_d_266600170_d_224596428", "d_173836415_d_266600170_d_740582332", "d_173836415_d_266600170_d_982213346", "d_173836415_d_266600170_d_398645039", "d_173836415_d_266600170_d_822274939")
 
@@ -3872,19 +3853,28 @@ veri_act <- veri_act%>%
          bioany.time = pmin(as.POSIXct(bldcol.time),as.POSIXct(urine.time),as.POSIXct(mw.time), na.rm = TRUE), #the earliest time of any collection
          biocol.time = pmax(as.POSIXct(bldcol.time),as.POSIXct(urine.time),as.POSIXct(mw.time), na.rm = TRUE)) ##the most recent time of any collection
 
-
 veri_act <- veri_act%>% mutate(
   module.week = ifelse(!is.na(module.time),ceiling(as.numeric(difftime(as_date(module.time)+days(5),as_date(recrstart.date),units="days"))/7),NA),
   anybio.week = ifelse(!is.na(bioany.time),ceiling(as.numeric(difftime(as_date(bioany.time+days(5)),as_date(recrstart.date), units="days"))/7),NA),
   biocol.week = ifelse(!is.na(biocol.time),ceiling(as.numeric(difftime(as_date(biocol.time+days(5)),as_date(recrstart.date), units="days"))/7),NA),
+  bldcol.week = ifelse(!is.na(bldcol.time),ceiling(as.numeric(difftime(as_date(bldcol.time+days(5)),as_date(recrstart.date), units="days"))/7),NA),
   revoke.week = ifelse(!is.na(d_664453818),ceiling(as.numeric(difftime(as_date(ymd_hms(d_664453818)+days(5)),as_date(recrstart.date), units="days"))/7),NA),
   dtdestroy.week = ifelse(!is.na(d_269050420),ceiling(as.numeric(difftime(as_date(ymd_hms(d_269050420)+days(5)),as_date(recrstart.date), units="days"))/7),NA),
   wdconsent.week = ifelse(!is.na(d_659990606),ceiling(as.numeric(difftime(as_date(ymd_hms(d_659990606)+days(5)),as_date(recrstart.date), units="days"))/7),NA))
 
-veri_act <- veri_act%>% mutate(allacts = case_when(d_100767870 == 353358909 & biospeComplete==1 ~ 353358909,
-                                                   d_100767870 == 104430631  | biospeComplete %in% c(0,NA) ~ 104430631 ))
-veri_act$allacts.time <- apply(veri_act[,c("module.time","biocol.time")],1,max)
-veri_act$allacts.week <- ceiling(as.numeric(difftime(as_date(ymd_hms(veri_act$allacts.time)+days(5)),as_date(recrstart.date), units="days"))/7)
+##to recreate the new variable of th competions based on the updated concept of completions as the completions 
+###of all four baseline modules and blood collections as Yes.
+veri_act <- veri_act%>% mutate(allacts0 = case_when(d_100767870 == 353358909 & biospeComplete==1 ~ 353358909,
+                                                    d_100767870 == 104430631  | biospeComplete %in% c(0,NA) ~ 104430631 ),
+                               allacts1 = case_when(d_100767870 == 353358909 & d_878865966 == 353358909 ~ 353358909,
+                                                    d_100767870 == 104430631  | d_878865966 %in% c(0,NA) ~ 104430631 ))
+# veri_act$allacts.time <- apply(veri_act[,c("module.time","biocol.time")],1,max)
+# veri_act$allacts.week <- ceiling(as.numeric(difftime(as_date(ymd_hms(veri_act$allacts.time)+days(5)),as_date(recrstart.date), units="days"))/7)
+
+veri_act$allacts.time1 <- apply(veri_act[,c("module.time","bldcol.time")],1,max)
+veri_act$allacts.week1 <- ceiling(as.numeric(difftime(as_date(as.POSIXct(veri_act$allacts.time1)+days(5)),
+                                                      as_date(recrstart.date), units="days"))/7)
+
 
 eligible.wk.total <- veri_resp[which(veri_resp$d_821247024 == 197316935 & veri_resp$d_130371375_d_266600170_d_731498909 ==353358909 ),] %>% 
   group_by(eligible.week) %>%
@@ -3909,10 +3899,15 @@ biocol.wk.total <- filter(veri_act, (biospeDonation =="Completed All 3 Sample Do
   dplyr::summarize(total_biocol=n(),
                    biocol.time.max=max(biocol.time,rm.na=T))
 
-allacts.wk.total <- filter(veri_act,allacts==353358909) %>% arrange(allacts.week,verified.week) %>% 
-  group_by(allacts.week)%>%
+# allacts.wk.total <- filter(veri_act,allacts==353358909) %>% arrange(allacts.week,verified.week) %>% 
+#   group_by(allacts.week)%>%
+#   dplyr::summarize(total_allacts=n(),
+#                    allacts.time.max=max(allacts.time,rm.na=T))
+
+allacts.wk.total <- filter(veri_act,allacts1==353358909) %>% arrange(allacts.week1,verified.week) %>% 
+  group_by(allacts.week1)%>%
   dplyr::summarize(total_allacts=n(),
-                   allacts.time.max=max(allacts.time,rm.na=T))
+                   allacts.time.max=max(allacts.time1,rm.na=T))
 
 #revoke.wk.total <- veri_act[which(veri_act$HIPAARevVer  ==353358909 ),] %>% 
 #  group_by(revoke.week) %>%
@@ -3932,7 +3927,7 @@ veri_wk_eligble <- merge(veri_wk_eligble, anybio.wk.total,by.x="verified.week",b
 veri_wk_eligble <- merge(veri_wk_eligble, biocol.wk.total,by.x="verified.week",by="biocol.week", all.x=TRUE,all.y=TRUE)
 veri_wk_eligble <- merge(veri_wk_eligble, dtdestroy.wk.total,by.x="verified.week",by="dtdestroy.week", all.x=TRUE,all.y=TRUE)
 veri_wk_eligble <- merge(veri_wk_eligble, wdconsent.wk.total,by.x="verified.week",by="wdconsent.week", all.x=TRUE,all.y=TRUE)
-veri_wk_eligble <- merge(veri_wk_eligble, allacts.wk.total,by.x="verified.week",by="allacts.week", all.x=TRUE,all.y=TRUE)
+veri_wk_eligble <- merge(veri_wk_eligble, allacts.wk.total,by.x="verified.week",by="allacts.week1", all.x=TRUE,all.y=TRUE)
 veri_wk_eligble1 <- filter(veri_wk_eligble,verified.week.date>0) %>% 
   mutate(verified.week.date=as_date(ifelse(is.na(verified.week.date),as_date(recrstart.date)+dweeks(verified.week-1)+days(5),verified.week.date)))
 
@@ -3974,7 +3969,7 @@ recr_veri_wk$Week.Ending <- recr_veri_wk$recruit.week.date
 recr_veri_wk$week.day <- wday(recr_veri_wk$Week.Starting,label=TRUE,abbr=F)
 recr_veri_wk <- recr_veri_wk %>% mutate(total_analysis=cumsum(total_verifieds.x)-cumsum(total_dtdestroy),
                                         total_followup=cumsum(total_verifieds.x)-cumsum(total_wdconsent))
-write.csv(recr_veri_wk,"~/Documents/Connect_projects/Biospecimen_Feb2022/Jing_projects/biospecQC_03082022/data/prod_Allratio_recruits_cumulative_0306.csv",row.names = F,na="")
+# write.csv(recr_veri_wk,"~/Documents/Connect_projects/Biospecimen_Feb2022/Jing_projects/biospecQC_03082022/data/prod_Allratio_recruits_cumulative_0306.csv",row.names = F,na="")
 #"recruit.week", "week.day", "recruit.week.date","passive_verifieds",
 var.select <- c(  "active_recruits.cum", "passive_verifieds.cum", "total_verified.cum", "cum.total.response.rate", 
                   "active_recruits", "total_verifieds.x", "total_anybio.cum","anybio_Invites_ratio","anybio_Verifieds_ratio",
@@ -3984,7 +3979,20 @@ var.select <- c(  "active_recruits.cum", "passive_verifieds.cum", "total_verifie
                   "total_analysis", "total_followup")        
 
 #"total_biocol.cum", "biocol_Invites_ratio", "biocol_Verifieds_ratio", "total_biocol",  this part is about the completed biospecimen collection counts
-
+##to update the completes in the labels requested from Amelia:
+# (3) Cumulative Completed BL Survey+Blood
+# (4) Completed BL Survey+Blood Response Ratio among Invited = Completed BL Survey+Blood/ Invited
+# (5) Completed BL Survey+Blood Response Ratio among Verified = Completed BL Survey+Blood/ Verified
+# (6) Completed BL Survey+Blood per week
+# 
+#  
+# 
+# Also I still see the old columns labeled below but the counts don't look right. In the 7/10 report for KPNW the 'Cumulative Completed All Participant Study Activities' for the week of 7/3/23-7/9/23 was n=813. In the 7/24 report the same week is showing n=81. I don't think that count is right. The new calculation for completes is less restrictive, so if anything the count should be higher than 813. Where completes=initial survey+ blood (with urine and mouthwash not taken into account at all)
+# 
+# (3) Cumulative Completed All Participant Study Activities
+# (4) Completed All Participant Study Activity Response Ratio among Invited = Completed All Activities/ Invited
+# (5) Completed All Participant Study Activity Response Ratio among Verified = Completed All Activities/ Verified
+# (6) Completed all Participant Study Activities per week
 labels <- c("Cumulative Invitations", "Cumulative Passive Verified Participants", "Cumulative Verified Participants", 
             "Response Ratio = Verfication/ Invitations", "Invitations per week", "Verifications per week", 
             "Cumulative Specimens defined as any baseline blood or urine or mouthwash collected", 
@@ -3993,9 +4001,9 @@ labels <- c("Cumulative Invitations", "Cumulative Passive Verified Participants"
             "Survey Response Ratio among Verified = All Baseline Surveys/ Verified", "Survey Completion per week", 
             "Cumulative Incentive Eligible", "Incentive Eligible Response Ratio among Invited = Incentive Eligible/ Invited", 
             "Incentive Eligible Response Ratio among Verified = Incentive Eligible/ Verified", "Incentive Eligible  per week ", 
-            "Cumulative Completed All Participant Study Activities", "Completed All Participant Study Activity Response Ratio among Invited = Completed All Activities/ Invited", 
-            "Completed All Participant Study Activity Response Ratio among Verified = Completed All Activities/ Verified", 
-            "Completed all Participant Study Activities per week",
+            "Cumulative Completed BL Survey+Blood", "Completed BL Survey+Blood Response Ratio among Invited = Completed BL Survey+Blood/ Invited", 
+            "Completed BL Survey+Blood Response Ratio among Verified = Completed BL Survey+Blood/ Verified", 
+            "Completed BL Survey+Blood per week",
             "Cumulative Withdrawals", "Withdrawal/ Verfied", "Withdrawals per week ", "Cumulative Data Destruction", "Data Destruction/ Verified", 
             "Data Destruction per week", "Available for Analysis (Verified - Data Destruction)", "Available for Follow-up (Verified - Withdrawals)")
 
@@ -4013,8 +4021,9 @@ box_setwd(dir_id = 200244295811)
 
 box_write(object = base[which(base$Week.Starting < as.Date(currentDate) & base$Week.Ending < as.Date(currentDate)),], file_name =paste("CCC_metrics_weekly_log_labels_",currentDate,".csv",sep=""),na="",row.names=F)
 
-write.csv(base,paste("~/Documents/CONNECT_projects/Biospecimen_Feb2022/Jing_projects/biospecQC_03082022/data/CCC_metrics_weekly_log_labels_",currentDate,".csv",sep=""),na="",row.names=F)
+#write.csv(base,paste("~/Documents/CONNECT_projects/Biospecimen_Feb2022/Jing_projects/biospecQC_03082022/data/CCC_metrics_weekly_log_labels_",currentDate,".csv",sep=""),na="",row.names=F)
 
+write.csv(base,paste("~/Documents/CONNECT_projects/Biospecimen_Feb2022/Jing_projects/biospecQC_03082022/data/CCC_metrics_weekly_log_labels_updated_",currentDate,".csv",sep=""),na="",row.names=F)
 #write.csv(base,"~/Documents/CONNECT_projects/Biospecimen_Feb2022/Jing_projects/biospecQC_03082022/data/CCC_metrics_weekly_log_labels_03062023.csv",na.rm="",row.names=F)
 ###by site
 veri_act <- apply_labels(veri_act,d_827220437 = "Site",#RcrtES_Site_v1r0
@@ -4076,10 +4085,10 @@ biocol.wk.total.site <- filter(veri_act, (biospeDonation =="Completed All 3 Samp
   dplyr::summarize(total_biocol=n(),
                    biocol.time.max=max(biocol.time,rm.na=T))
 
-allacts.wk.total.site <- filter(veri_act,allacts==353358909) %>% arrange(site,allacts.week,verified.week) %>% 
-  group_by(site,allacts.week)%>%
+allacts.wk.total.site <- filter(veri_act,allacts1==353358909) %>% arrange(site,allacts.week1,verified.week) %>%
+  group_by(site,allacts.week1)%>%
   dplyr::summarize(total_allacts=n(),
-                   allacts.time.max=max(allacts.time,rm.na=T))
+                   allacts.time.max=max(allacts.time1,rm.na=T))
 #revoke.wk.total <- veri_act[which(veri_act$HIPAARevVer  ==353358909 ),] %>% 
 #  group_by(revoke.week) %>%
 #  dplyr::summarize(total_revoke=n())
@@ -4099,7 +4108,7 @@ veri_wk_eligble.site <- merge(veri_wk_eligble.site,anybio.wk.total.site,by.x=c("
 veri_wk_eligble.site <- merge(veri_wk_eligble.site, biocol.wk.total.site,by.x=c("site","verified.week"),by=c("site","biocol.week"), all.x=TRUE,all.y=TRUE)
 veri_wk_eligble.site <- merge(veri_wk_eligble.site, dtdestroy.wk.total.site,by.x=c("site","verified.week"),by=c("site","dtdestroy.week"), all.x=TRUE,all.y=TRUE)
 veri_wk_eligble.site <- merge(veri_wk_eligble.site, wdconsent.wk.total.site,by.x=c("site","verified.week"),by=c("site","wdconsent.week"), all.x=TRUE,all.y=TRUE)
-veri_wk_eligble.site <- merge(veri_wk_eligble.site, allacts.wk.total.site,by.x=c("site","verified.week"),by=c("site","allacts.week"), all.x=TRUE,all.y=TRUE)
+veri_wk_eligble.site <- merge(veri_wk_eligble.site, allacts.wk.total.site,by.x=c("site","verified.week"),by=c("site","allacts.week1"), all.x=TRUE,all.y=TRUE)
 
 #veri_wk_eligble.site <- veri_wk_eligble.site %>% mutate_at(vars(matches("total")),~replace_na(., 0))
 
@@ -4180,9 +4189,9 @@ for(i in 1:length(site)){
               "Survey Response Ratio among Verified = All Baseline Surveys/ Verified", "Survey Completion per week", 
               "Cumulative Incentive Eligible", "Incentive Eligible Response Ratio among Invited = Incentive Eligible/ Invited", 
               "Incentive Eligible Response Ratio among Verified = Incentive Eligible/ Verified", "Incentive Eligible  per week ", 
-              "Cumulative Completed All Participant Study Activities", "Completed All Participant Study Activity Response Ratio among Invited = Completed All Activities/ Invited", 
-              "Completed All Participant Study Activity Response Ratio among Verified = Completed All Activities/ Verified", 
-              "Completed all Participant Study Activities per week",
+              "Cumulative Completed BL Survey+Blood", "Completed BL Survey+Blood Response Ratio among Invited = Completed BL Survey+Blood/ Invited", 
+              "Completed BL Survey+Blood Response Ratio among Verified = Completed BL Survey+Blood/ Verified", 
+              "Completed BL Survey+Blood per week",
               "Cumulative Withdrawals", "Withdrawal/ Verfied", "Withdrawals per week ", "Cumulative Data Destruction", "Data Destruction/ Verified", 
               "Data Destruction per week", "Available for Analysis (Verified - Data Destruction)", "Available for Follow-up (Verified - Withdrawals)")
   
@@ -4194,7 +4203,7 @@ for(i in 1:length(site)){
   }
   
   #write.csv(sub.base[which(subs.recr_veri_wk$Week.Starting != currentDate),],paste("~/Documents/CONNECT_projects/Biospecimen_Feb2022/Jing_projects/biospecQC_03082022/data/CCC_metrics_weekly_log_labels_",site[i],"03202023.csv", sep=""))
-  write.csv(sub.base[which(subs.recr_veri_wk$Week.Starting != currentDate),],paste(outputpath,"CCC_metrics_weekly_log_labels_",site[i],currentDate,".csv", sep=""),na="",row.names=F)
+  write.csv(sub.base[which(as.Date(sub.base$Week.Starting) < currentDate),],paste(outputpath,"CCC_metrics_weekly_log_labels_",site[i],currentDate,".csv", sep=""),na="",row.names=F)
   
   box_write(object = sub.base[which(sub.base$Week.Starting < as.Date(currentDate) & sub.base$Week.Ending < as.Date(currentDate)),], file_name =paste("CCC_metrics_weekly_log_labels_",site[i],currentDate,".csv",sep=""),na="",row.names=F)
   
